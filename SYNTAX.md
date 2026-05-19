@@ -83,6 +83,6 @@ If you assign list of tags, e.g `[tag1, tag2]`, this item will be executed if `t
 
 Special tags: `always` and `never`.
 
-If you assign the `always` tag, `drill` will always run that item, unless you specifically skip it (`--skip-tags always`).
+If you assign the `always` tag, `driller` will always run that item, unless you specifically skip it (`--skip-tags always`).
 
-If you assign the `never` tag to item, `drill` will skip that item unless you specifically request it (`--tags never`).
+If you assign the `never` tag to item, `driller` will skip that item unless you specifically request it (`--tags never`).

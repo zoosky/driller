@@ -1,11 +1,13 @@
-# Drill
+# Driller
 
-[![](https://img.shields.io/crates/v/drill.svg?ts=2)](https://crates.io/crates/drill)
-![](https://travis-ci.com/fcsonline/drill.svg?branch=master)
+[![](https://img.shields.io/crates/v/driller.svg?ts=2)](https://crates.io/crates/driller)
 
-Drill is a HTTP load testing application written in Rust. The main goal
-for this project is to build a really lightweight tool as alternative to other
-that require JVM and other stuff.
+Driller is a HTTP load testing application written in Rust. Friendly fork of
+[fcsonline/drill](https://github.com/fcsonline/drill) — see [FORK.md](./FORK.md)
+for the rationale and the relationship to upstream.
+
+The main goal for this project is to build a really lightweight tool as
+alternative to other that require JVM and other stuff.
 
 You can write benchmark files, in YAML format, describing all the stuff you
 want to test.
@@ -202,30 +204,30 @@ If you want to know more about the benchmark file syntax, [read this](./SYNTAX.m
 
 ## Install
 
-Right now, the easiest way to get `drill` is to go to the
-[latest release](https://github.com/fcsonline/drill/releases/latest)
+Right now, the easiest way to get `driller` is to go to the
+[latest release](https://github.com/zoosky/driller/releases/latest)
 page and download the binary file for your platform.
 
 
-Another way to install `drill`, if you have [Rust](https://rustup.rs/) available in
+Another way to install `driller`, if you have [Rust](https://rustup.rs/) available in
 your system, is with [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html):
 
 ```
-cargo install drill
-drill --benchmark benchmark.yml --stats
+cargo install driller
+driller --benchmark benchmark.yml --stats
 ```
 
 or download the source code and compile it:
 
 ```
-git clone git@github.com:fcsonline/drill.git && cd drill
+git clone git@github.com:zoosky/driller.git && cd driller
 cargo build --release
-./target/release/drill --benchmark benchmark.yml --stats
+./target/release/driller --benchmark benchmark.yml --stats
 ```
 
 ### Dependencies
 
-OpenSSL is needed in order to compile Drill, whether it is through `cargo install`
+OpenSSL is needed in order to compile Driller, whether it is through `cargo install`
 or when compiling from source with `cargo build`.
 
 Depending on your platform, the name of the dependencies may differ.
@@ -253,11 +255,11 @@ And then run `vcpkg install openssl:x64-windows-static-md`.
 
 ## Features
 
-This is the list of all features supported by the current version of `drill`:
+This is the list of all features supported by the current version of `driller`:
 
 - **Concurrency:** run your benchmarks choosing the number of concurrent iterations.
 - **Multi iterations:** specify the number of iterations you want to run the benchmark.
-- **Ramp-up:** specify the amount of time, in seconds, that it will take `drill` to start all iterations.
+- **Ramp-up:** specify the amount of time, in seconds, that it will take `driller` to start all iterations.
 - **Delay:** introduce controlled delay between requests. Example: [delay.yml](./example/delay.yml)
 - **Dynamic urls:** execute requests with dynamic interpolations in the url, like `/api/users/{{ item }}`
 - **Dynamic headers:** execute requests with dynamic headers. Example: [headers.yml](./example/headers.yml)
@@ -283,14 +285,14 @@ production environments.
 
 ## Command line interface
 
-Full list of cli options, which is available under `drill --help`
+Full list of cli options, which is available under `driller --help`
 
 ```
-drill 0.9.0
+driller 1.0.0-alpha.1
 HTTP load testing application written in Rust inspired by Ansible syntax
 
 USAGE:
-    drill [FLAGS] [OPTIONS] --benchmark <benchmark>
+    driller [FLAGS] [OPTIONS] --benchmark <benchmark>
 
 FLAGS:
     -h, --help                      Prints help information
@@ -319,15 +321,16 @@ OPTIONS:
 - Complete and improve the interpolation engine
 - Add writing to a file support
 
-## Donations
+## Credits
 
-If you appreciate all the job done in this project, a small donation is always welcome:
+Driller is a fork of [fcsonline/drill](https://github.com/fcsonline/drill) by
+Ferran Basora and contributors, who built the original tool as a side project
+to learn Rust. If you appreciate the work that went into the upstream:
 
-[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/fcsonline)
+[!["Buy Ferran a Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/fcsonline)
 
 ## Contribute
 
-This project started as a side project to learn Rust, so I'm sure that is full
-of mistakes and areas to be improve. If you think you can tweak the code to
-make it better, I'll really appreciate a pull request. ;)
+Pull requests are welcome. See [FORK.md](./FORK.md) for the relationship to
+upstream and our goals for this fork.
 
