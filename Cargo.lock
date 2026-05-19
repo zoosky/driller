@@ -287,8 +287,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "drill"
-version = "0.9.0"
+name = "driller"
+version = "1.0.0-alpha.1"
 dependencies = [
  "async-trait",
  "clap",

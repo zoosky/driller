@@ -61,7 +61,7 @@ fn main() {
 }
 
 fn app_args<'a>() -> clap::ArgMatches<'a> {
-  App::new("drill")
+  App::new("driller")
     .version(crate_version!())
     .about("HTTP load testing application written in Rust inspired by Ansible syntax")
     .arg(Arg::with_name("benchmark").help("Sets the benchmark file").long("benchmark").short("b").required(true).takes_value(true))
