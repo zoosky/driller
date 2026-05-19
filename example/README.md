@@ -1,6 +1,6 @@
-# How to play with drill
+# How to play with driller
 
-Compile drill:
+Compile driller:
 
 ```
 cargo build --release
@@ -19,7 +19,7 @@ and then run:
 
 ```
 cd example
-../target/release/drill --benchmark benchmark.yml
+../target/release/driller --benchmark benchmark.yml
 ```
 
 ### Example 2 (Cookies)
@@ -36,7 +36,7 @@ and then run:
 
 ```
 cd example
-../target/release/drill --benchmark cookies.yml
+../target/release/driller --benchmark cookies.yml
 ```
 
 ### Example 3 (Custom headers)
@@ -53,4 +53,4 @@ and then run:
 
 ```
 cd example
-../target/release/drill --benchmark headers.yml
+../target/release/driller --benchmark headers.yml
