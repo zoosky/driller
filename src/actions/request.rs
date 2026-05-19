@@ -23,7 +23,7 @@ use crate::interpolator;
 
 use crate::actions::{Report, Runnable};
 
-static USER_AGENT: &str = "drill";
+static USER_AGENT: &str = "driller";
 
 #[derive(Clone)]
 pub enum Body {
