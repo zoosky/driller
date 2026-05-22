@@ -14,9 +14,10 @@ responses >3.6 s — issues #151/#165/#174/#195/#201/#216, fix proposed in PR
 Apache Drill (issue #181). Another community contributor publicly proposed a
 fork in March 2025 (issue #200). We're picking up that thread.
 
-The goal of this fork is to **be a credible, actively maintained successor**:
-clear the open PR backlog, ship the known-good fixes, modernize the dependency
-tree, and commit to a predictable release cadence.
+The goal of this fork is to **be a maintained alternative**: clear the open
+PR backlog, ship the known-good fixes, and modernize the dependency tree.
+Maintenance is best-effort and unpaid — see "Governance" below for what is
+and isn't promised.
 
 ## Relationship to upstream
 
@@ -31,7 +32,7 @@ tree, and commit to a predictable release cadence.
 - **We intend to upstream fixes.** Where it's reasonable, fixes landed here
   will be opened as PRs against `fcsonline/drill` as well. We are not trying
   to compete with the upstream; we're trying to provide an available
-  alternative for users who need predictable maintenance.
+  alternative when upstream attention is unavailable.
 
 ## Migration
 
@@ -54,13 +55,18 @@ changes.
 
 ## Governance
 
-This fork is maintained by **Andreas Kapp**. We commit to:
+This is a best-effort fork. **There is no fixed release or triage cadence** —
+work happens as time and interest allow, not on a calendar. What we do commit
+to:
 
-- Monthly point releases, at minimum, for the first 12 months.
-- Weekly issue/PR triage.
-- A documented release process and publicly stated maintainers.
-- Friendly coordination with upstream — we will not block or compete on
-  attention.
+- **Honest signaling.** If maintenance stops or pauses, the README and the
+  crates.io description will say so plainly. No "ghost" fork pretending to
+  be alive.
+- **Friendly coordination with upstream.** We will not block or compete on
+  attention; where it's reasonable, fixes landed here will be opened as PRs
+  against `fcsonline/drill` as well.
+- **GPL faith.** No relicensing attempts; no proprietary forks downstream of
+  this one. (The license already forbids both, but stating it.)
 
 ## Credits
 

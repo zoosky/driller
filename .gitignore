@@ -18,3 +18,6 @@ example/server/node_modules
 
 # Editor temp files
 .vscode
+
+# OS noise
+.DS_Store

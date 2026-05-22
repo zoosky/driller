@@ -288,7 +288,7 @@ production environments.
 Full list of cli options, which is available under `driller --help`
 
 ```
-driller 1.0.0-alpha.1
+driller 0.10.0-alpha.1
 HTTP load testing application written in Rust inspired by Ansible syntax
 
 USAGE:
