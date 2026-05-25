@@ -4,8 +4,8 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use colored::Colorize;
 use reqwest::{
-  header::{self, HeaderMap, HeaderName, HeaderValue},
   ClientBuilder, Method, Response,
+  header::{self, HeaderMap, HeaderName, HeaderValue},
 };
 use serde_yaml::Value as YamlValue;
 use std::fmt::Write;
@@ -14,7 +14,7 @@ use std::io::Read;
 use url::Url;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 use crate::actions::{extract, extract_optional};
 use crate::benchmark::{Context, Pool, Reports};
@@ -285,12 +285,12 @@ fn yaml_to_json(data: YamlValue) -> Value {
 #[async_trait]
 impl Runnable for Request {
   async fn execute(&self, context: &mut Context, reports: &mut Reports, pool: &Pool, config: &Config) {
-    if self.with_item.is_some() {
-      context.insert("item".to_string(), yaml_to_json(self.with_item.clone().unwrap()));
+    if let Some(ref item) = self.with_item {
+      context.insert("item".to_string(), yaml_to_json(item.clone()));
     }
 
-    if self.index.is_some() {
-      context.insert("index".to_string(), json!(self.index.unwrap()));
+    if let Some(index) = self.index {
+      context.insert("index".to_string(), json!(index));
     }
 
     let (res, duration_ms) = self.send_request(context, pool, config).await;
