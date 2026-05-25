@@ -1,5 +1,5 @@
+use rand::rng;
 use rand::seq::SliceRandom;
-use rand::thread_rng;
 use serde_yaml::Value;
 use std::path::Path;
 
@@ -37,7 +37,7 @@ pub fn expand(parent_path: &str, item: &Value, benchmark: &mut Benchmark) {
 
   if let Some(shuffle) = item.get("shuffle").and_then(|v| v.as_bool()) {
     if shuffle {
-      let mut rng = thread_rng();
+      let mut rng = rng();
       with_items_file.shuffle(&mut rng);
     }
   }

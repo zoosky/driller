@@ -1,7 +1,7 @@
 use std::convert::TryInto;
 
+use rand::rng;
 use rand::seq::SliceRandom;
-use rand::thread_rng;
 use serde_yaml::{Number, Value};
 
 use crate::interpolator::INTERPOLATION_REGEX;
@@ -51,7 +51,7 @@ pub fn expand(item: &Value, benchmark: &mut Benchmark) {
 
       if let Some(shuffle) = item.get("shuffle").and_then(|v| v.as_bool()) {
         if shuffle {
-          let mut rng = thread_rng();
+          let mut rng = rng();
           with_items.shuffle(&mut rng);
         }
       }
