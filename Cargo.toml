@@ -1,12 +1,13 @@
 [package]
 name = "driller"
-version = "0.10.0-alpha.1"
+version = "0.10.0-alpha.2"
 authors = ["Ferran Basora <fcsonline@gmail.com>", "Andreas Kapp <zoosky@gmail.com>"]
 description = "Driller is a HTTP load testing application written in Rust inspired by Ansible syntax. Friendly fork of fcsonline/drill."
 repository = "https://github.com/zoosky/driller"
 keywords = ["performance", "http", "ansible", "jmeter"]
 license = "GPL-3.0"
-edition = "2021"
+edition = "2024"
+rust-version = "1.85"
 exclude = [
     ".github/",
     ".gitignore",
@@ -15,7 +16,7 @@ exclude = [
 ]
 
 [dependencies]
-clap = "2.32.0"
+clap = { version = "4", features = ["derive"] }
 colored = "2.0.0"
 csv = "1.0.5"
 regex = "1.5.5"

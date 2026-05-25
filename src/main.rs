@@ -9,77 +9,103 @@ mod tags;
 mod writer;
 
 use crate::actions::Report;
-use clap::crate_version;
-use clap::{App, Arg};
+use clap::Parser;
 use colored::*;
 use hdrhistogram::Histogram;
 use linked_hash_map::LinkedHashMap;
 use std::collections::HashMap;
 use std::process;
 
+#[derive(Parser)]
+#[command(name = "driller", version, about = "HTTP load testing application written in Rust inspired by Ansible syntax")]
+struct Cli {
+  /// Sets the benchmark file
+  #[arg(short, long)]
+  benchmark: String,
+
+  /// Shows request statistics
+  #[arg(short, long, conflicts_with = "compare")]
+  stats: bool,
+
+  /// Sets a report file
+  #[arg(short, long, conflicts_with = "compare")]
+  report: Option<String>,
+
+  /// Sets a compare file
+  #[arg(short, long, conflicts_with = "report")]
+  compare: Option<String>,
+
+  /// Sets a threshold value in ms amongst the compared file
+  #[arg(short, long, conflicts_with = "report")]
+  threshold: Option<String>,
+
+  /// Do not panic if an interpolation is not present. (Not recommended)
+  #[arg(long)]
+  relaxed_interpolations: bool,
+
+  /// Disables SSL certification check. (Not recommended)
+  #[arg(long)]
+  no_check_certificate: bool,
+
+  /// Tags to include
+  #[arg(long)]
+  tags: Option<String>,
+
+  /// Tags to exclude
+  #[arg(long)]
+  skip_tags: Option<String>,
+
+  /// List all benchmark tags
+  #[arg(long, conflicts_with_all = ["tags", "skip_tags"])]
+  list_tags: bool,
+
+  /// List benchmark tasks (executes --tags/--skip-tags filter)
+  #[arg(long)]
+  list_tasks: bool,
+
+  /// Disables output
+  #[arg(short, long)]
+  quiet: bool,
+
+  /// Set timeout in seconds for all requests
+  #[arg(short = 'o', long)]
+  timeout: Option<String>,
+
+  /// Shows statistics in nanoseconds
+  #[arg(short, long)]
+  nanosec: bool,
+
+  /// Toggle verbose output
+  #[arg(short, long)]
+  verbose: bool,
+}
+
 fn main() {
-  let matches = app_args();
-  let benchmark_file = matches.value_of("benchmark").unwrap();
-  let report_path_option = matches.value_of("report");
-  let stats_option = matches.is_present("stats");
-  let compare_path_option = matches.value_of("compare");
-  let threshold_option = matches.value_of("threshold");
-  let no_check_certificate = matches.is_present("no-check-certificate");
-  let relaxed_interpolations = matches.is_present("relaxed-interpolations");
-  let quiet = matches.is_present("quiet");
-  let nanosec = matches.is_present("nanosec");
-  let timeout = matches.value_of("timeout");
-  let verbose = matches.is_present("verbose");
-  let tags_option = matches.value_of("tags");
-  let skip_tags_option = matches.value_of("skip-tags");
-  let list_tags = matches.is_present("list-tags");
-  let list_tasks = matches.is_present("list-tasks");
+  let cli = Cli::parse();
 
   #[cfg(windows)]
   let _ = control::set_virtual_terminal(true);
 
-  if list_tags {
-    tags::list_benchmark_file_tags(benchmark_file);
+  if cli.list_tags {
+    tags::list_benchmark_file_tags(&cli.benchmark);
     process::exit(0);
   };
 
-  let tags = tags::Tags::new(tags_option, skip_tags_option);
+  let tags = tags::Tags::new(cli.tags.as_deref(), cli.skip_tags.as_deref());
 
-  if list_tasks {
-    tags::list_benchmark_file_tasks(benchmark_file, &tags);
+  if cli.list_tasks {
+    tags::list_benchmark_file_tasks(&cli.benchmark, &tags);
     process::exit(0);
   };
 
-  let benchmark_result = benchmark::execute(benchmark_file, report_path_option, relaxed_interpolations, no_check_certificate, quiet, nanosec, timeout, verbose, &tags);
+  let benchmark_result = benchmark::execute(&cli.benchmark, cli.report.as_deref(), cli.relaxed_interpolations, cli.no_check_certificate, cli.quiet, cli.nanosec, cli.timeout.as_deref(), cli.verbose, &tags);
   let list_reports = benchmark_result.reports;
   let duration = benchmark_result.duration;
 
-  show_stats(&list_reports, stats_option, nanosec, duration);
-  compare_benchmark(&list_reports, compare_path_option, threshold_option);
+  show_stats(&list_reports, cli.stats, cli.nanosec, duration);
+  compare_benchmark(&list_reports, cli.compare.as_deref(), cli.threshold.as_deref());
 
   process::exit(0)
-}
-
-fn app_args<'a>() -> clap::ArgMatches<'a> {
-  App::new("driller")
-    .version(crate_version!())
-    .about("HTTP load testing application written in Rust inspired by Ansible syntax")
-    .arg(Arg::with_name("benchmark").help("Sets the benchmark file").long("benchmark").short("b").required(true).takes_value(true))
-    .arg(Arg::with_name("stats").short("s").long("stats").help("Shows request statistics").takes_value(false).conflicts_with("compare"))
-    .arg(Arg::with_name("report").short("r").long("report").help("Sets a report file").takes_value(true).conflicts_with("compare"))
-    .arg(Arg::with_name("compare").short("c").long("compare").help("Sets a compare file").takes_value(true).conflicts_with("report"))
-    .arg(Arg::with_name("threshold").short("t").long("threshold").help("Sets a threshold value in ms amongst the compared file").takes_value(true).conflicts_with("report"))
-    .arg(Arg::with_name("relaxed-interpolations").long("relaxed-interpolations").help("Do not panic if an interpolation is not present. (Not recommended)").takes_value(false))
-    .arg(Arg::with_name("no-check-certificate").long("no-check-certificate").help("Disables SSL certification check. (Not recommended)").takes_value(false))
-    .arg(Arg::with_name("tags").long("tags").help("Tags to include").takes_value(true))
-    .arg(Arg::with_name("skip-tags").long("skip-tags").help("Tags to exclude").takes_value(true))
-    .arg(Arg::with_name("list-tags").long("list-tags").help("List all benchmark tags").takes_value(false).conflicts_with_all(&["tags", "skip-tags"]))
-    .arg(Arg::with_name("list-tasks").long("list-tasks").help("List benchmark tasks (executes --tags/--skip-tags filter)").takes_value(false))
-    .arg(Arg::with_name("quiet").short("q").long("quiet").help("Disables output").takes_value(false))
-    .arg(Arg::with_name("timeout").short("o").long("timeout").help("Set timeout in seconds for all requests").takes_value(true))
-    .arg(Arg::with_name("nanosec").short("n").long("nanosec").help("Shows statistics in nanoseconds").takes_value(false))
-    .arg(Arg::with_name("verbose").short("v").long("verbose").help("Toggle verbose output").takes_value(false))
-    .get_matches()
 }
 
 struct DrillStats {
