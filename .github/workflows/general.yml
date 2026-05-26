@@ -36,6 +36,13 @@ jobs:
           components: clippy
       - run: cargo clippy -- -D warnings
 
+  deny:
+    name: Cargo Deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+
   coverage:
     name: Code coverage
     runs-on: ubuntu-latest
