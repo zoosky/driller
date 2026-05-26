@@ -131,7 +131,9 @@ impl DrillStats {
 }
 
 fn compute_stats(sub_reports: &[Report]) -> DrillStats {
-  let mut hist = Histogram::<u64>::new_with_bounds(1, 60 * 60 * 1000, 2).unwrap();
+  // Values are recorded in microseconds (duration_ms * 1000), so the upper
+  // bound must also be in microseconds. 1 hour = 3_600_000_000 us.
+  let mut hist = Histogram::<u64>::new_with_bounds(1, 60 * 60 * 1_000_000, 2).unwrap();
   let mut group_by_status = HashMap::new();
 
   for req in sub_reports {
@@ -139,7 +141,10 @@ fn compute_stats(sub_reports: &[Report]) -> DrillStats {
   }
 
   for r in sub_reports.iter() {
-    hist += (r.duration * 1_000.0) as u64;
+    let duration_us = (r.duration * 1_000.0) as u64;
+    if let Err(e) = hist.record(duration_us) {
+      eprintln!("warning: request '{}' duration {:.0}ms exceeds histogram range, skipped: {}", r.name, r.duration, e);
+    }
   }
 
   let total_requests = sub_reports.len();
@@ -219,5 +224,54 @@ fn compare_benchmark(list_reports: &[Vec<Report>], compare_path_option: Option<&
     } else {
       panic!("Threshold needed!");
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn report(name: &str, duration_ms: f64, status: u16) -> Report {
+    Report {
+      name: name.to_string(),
+      duration: duration_ms,
+      status,
+    }
+  }
+
+  // Regression: upstream #151, #174, #201, #216
+  // Durations above 3.6 s caused a panic because the histogram upper bound
+  // was 3_600_000 (microseconds) while the code records values in
+  // microseconds (duration_ms * 1000). A 5 s request = 5_000_000 us
+  // exceeded the bound.
+  #[test]
+  fn histogram_accepts_durations_above_5s() {
+    let reports = vec![
+      report("fast", 100.0, 200),
+      report("slow", 5_000.0, 200),       // 5 seconds
+      report("very_slow", 30_000.0, 200), // 30 seconds
+    ];
+    let stats = compute_stats(&reports);
+    assert_eq!(stats.total_requests, 3);
+    assert_eq!(stats.successful_requests, 3);
+    assert!(stats.mean_duration() > 1_000.0, "mean should reflect long durations");
+  }
+
+  #[test]
+  fn histogram_accepts_duration_near_one_hour() {
+    let reports = vec![
+      report("marathon", 3_500_000.0, 200), // ~58 minutes
+    ];
+    let stats = compute_stats(&reports);
+    assert_eq!(stats.total_requests, 1);
+  }
+
+  #[test]
+  fn stats_counts_failures() {
+    let reports = vec![report("ok", 50.0, 200), report("redirect", 60.0, 301), report("err", 70.0, 500)];
+    let stats = compute_stats(&reports);
+    assert_eq!(stats.total_requests, 3);
+    assert_eq!(stats.successful_requests, 1);
+    assert_eq!(stats.failed_requests, 2);
   }
 }
