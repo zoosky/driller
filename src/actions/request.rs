@@ -53,6 +53,21 @@ struct AssignedRequest {
 }
 
 impl Request {
+  /// Creates a minimal GET request without parsing YAML.
+  pub fn simple_get(name: &str, url: &str) -> Request {
+    Request {
+      name: name.to_string(),
+      url: url.to_string(),
+      time: 0.0,
+      method: "GET".to_string(),
+      headers: HashMap::new(),
+      body: None,
+      with_item: None,
+      index: None,
+      assign: None,
+    }
+  }
+
   pub fn is_that_you(item: &YamlValue) -> bool {
     item.get("request").and_then(|v| v.as_mapping()).is_some()
   }
@@ -233,7 +248,7 @@ impl Request {
           let status_text = if status.is_server_error() {
             status.to_string().red()
           } else if status.is_client_error() {
-            status.to_string().purple()
+            status.to_string().cyan()
           } else {
             status.to_string().yellow()
           };

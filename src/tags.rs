@@ -4,15 +4,15 @@ use serde_yaml::Value;
 use std::collections::HashSet;
 
 #[derive(Debug)]
-pub struct Tags<'a> {
-  pub tags: Option<HashSet<&'a str>>,
-  pub skip_tags: Option<HashSet<&'a str>>,
+pub struct Tags {
+  pub tags: Option<HashSet<String>>,
+  pub skip_tags: Option<HashSet<String>>,
 }
 
-impl<'a> Tags<'a> {
-  pub fn new(tags_option: Option<&'a str>, skip_tags_option: Option<&'a str>) -> Self {
-    let tags: Option<HashSet<&str>> = tags_option.map(|m| m.split(',').map(|s| s.trim()).collect());
-    let skip_tags: Option<HashSet<&str>> = skip_tags_option.map(|m| m.split(',').map(|s| s.trim()).collect());
+impl Tags {
+  pub fn new(tags_option: Option<&str>, skip_tags_option: Option<&str>) -> Self {
+    let tags: Option<HashSet<String>> = tags_option.map(|m| m.split(',').map(|s| s.trim().to_string()).collect());
+    let skip_tags: Option<HashSet<String>> = skip_tags_option.map(|m| m.split(',').map(|s| s.trim().to_string()).collect());
 
     if let (Some(t), Some(s)) = (&tags, &skip_tags)
       && !t.is_disjoint(s)
@@ -29,7 +29,7 @@ impl<'a> Tags<'a> {
   pub fn should_skip_item(&self, item: &Value) -> bool {
     match item.get("tags").and_then(|v| v.as_sequence()) {
       Some(item_tags_raw) => {
-        let item_tags: HashSet<&str> = item_tags_raw.iter().filter_map(|t| t.as_str()).collect();
+        let item_tags: HashSet<String> = item_tags_raw.iter().filter_map(|t| t.as_str()).map(|s| s.to_string()).collect();
         if let Some(s) = &self.skip_tags
           && !s.is_disjoint(&item_tags)
         {

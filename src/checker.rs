@@ -3,7 +3,11 @@ use colored::*;
 use crate::actions::Report;
 use crate::reader;
 
-// Feature f0001
+/// Compares benchmark reports against a baseline YAML file.
+///
+/// Returns `Ok(())` when every request's duration delta stays within
+/// `threshold` milliseconds of the baseline, or `Err(n)` where `n` is
+/// the number of requests that exceeded it.
 pub fn compare(list_reports: &[Vec<Report>], filepath: &str, threshold: f64) -> Result<(), i32> {
   let docs = reader::read_file_as_yml(filepath);
   let doc = &docs[0];
