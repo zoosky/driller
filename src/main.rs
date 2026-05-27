@@ -9,75 +9,140 @@ mod tags;
 mod writer;
 
 use crate::actions::Report;
-use clap::Parser;
+use crate::benchmark::RunOptions;
+use clap::{Args, Parser, Subcommand};
 use colored::*;
 use hdrhistogram::Histogram;
 use linked_hash_map::LinkedHashMap;
 use std::collections::HashMap;
 use std::process;
+use std::time::Duration;
 
 #[derive(Parser)]
 #[command(name = "driller", version, about = "HTTP load testing application written in Rust inspired by Ansible syntax")]
 struct Cli {
+  #[command(subcommand)]
+  command: Option<Commands>,
+
   /// Sets the benchmark file
-  #[arg(short, long)]
-  benchmark: String,
+  #[arg(short, long, global = true)]
+  benchmark: Option<String>,
 
   /// Shows request statistics
-  #[arg(short, long, conflicts_with = "compare")]
+  #[arg(short, long, global = true, conflicts_with = "compare")]
   stats: bool,
 
   /// Sets a report file
-  #[arg(short, long, conflicts_with = "compare")]
+  #[arg(short, long, global = true, conflicts_with = "compare")]
   report: Option<String>,
 
   /// Sets a compare file
-  #[arg(short, long, conflicts_with = "report")]
+  #[arg(short, long, global = true, conflicts_with = "report")]
   compare: Option<String>,
 
   /// Sets a threshold value in ms amongst the compared file
-  #[arg(short, long, conflicts_with = "report")]
+  #[arg(short, long, global = true, conflicts_with = "report")]
   threshold: Option<String>,
 
   /// Do not panic if an interpolation is not present. (Not recommended)
-  #[arg(long)]
+  #[arg(long, global = true)]
   relaxed_interpolations: bool,
 
   /// Disables SSL certification check. (Not recommended)
-  #[arg(long)]
+  #[arg(long, global = true)]
   no_check_certificate: bool,
 
   /// Tags to include
-  #[arg(long)]
+  #[arg(long, global = true)]
   tags: Option<String>,
 
   /// Tags to exclude
-  #[arg(long)]
+  #[arg(long, global = true)]
   skip_tags: Option<String>,
 
   /// List all benchmark tags
-  #[arg(long, conflicts_with_all = ["tags", "skip_tags"])]
+  #[arg(long, global = true, conflicts_with_all = ["tags", "skip_tags"])]
   list_tags: bool,
 
   /// List benchmark tasks (executes --tags/--skip-tags filter)
-  #[arg(long)]
+  #[arg(long, global = true)]
   list_tasks: bool,
 
   /// Disables output
-  #[arg(short, long)]
+  #[arg(short, long, global = true)]
   quiet: bool,
 
   /// Set timeout in seconds for all requests
-  #[arg(short = 'o', long)]
+  #[arg(short = 'o', long, global = true)]
   timeout: Option<String>,
 
   /// Shows statistics in nanoseconds
-  #[arg(short, long)]
+  #[arg(short, long, global = true)]
   nanosec: bool,
 
   /// Toggle verbose output
-  #[arg(short, long)]
+  #[arg(short, long, global = true)]
   verbose: bool,
+}
+
+// Feature f0001
+#[derive(Subcommand)]
+enum Commands {
+  /// Execute a benchmark or ad-hoc HTTP request
+  Run(RunArgs),
+}
+
+/// CLI flags specific to the `run` subcommand.
+// Feature f0001
+#[derive(Args)]
+struct RunArgs {
+  /// Target URL for ad-hoc testing (creates a synthetic GET request)
+  url: Option<String>,
+
+  /// Override the base URL from the benchmark file
+  #[arg(short = 'u', long)]
+  base_url: Option<String>,
+
+  /// Number of concurrent requests
+  #[arg(short = 'p', long)]
+  concurrency: Option<usize>,
+
+  /// Number of iterations to run
+  #[arg(short = 'i', long, conflicts_with = "duration")]
+  iterations: Option<usize>,
+
+  /// Run for a fixed wall-clock duration (e.g. "30s", "5m", "1h")
+  #[arg(short = 'd', long, conflicts_with = "iterations")]
+  duration: Option<String>,
+
+  /// Ramp-up time in seconds
+  #[arg(short = 'e', long)]
+  rampup: Option<usize>,
+}
+
+/// Parses a human-readable duration string into a `Duration`.
+///
+/// Accepts suffixes: `s` (seconds), `m` (minutes), `h` (hours).
+/// Plain numbers are treated as seconds.
+// Feature f0001
+fn parse_duration(s: &str) -> Duration {
+  let s = s.trim();
+  let (num_part, multiplier) = if let Some(n) = s.strip_suffix('s') {
+    (n, 1u64)
+  } else if let Some(n) = s.strip_suffix('m') {
+    (n, 60)
+  } else if let Some(n) = s.strip_suffix('h') {
+    (n, 3600)
+  } else {
+    (s, 1)
+  };
+
+  let value: u64 = num_part.parse().unwrap_or_else(|_| {
+    eprintln!("error: invalid duration '{s}' (expected e.g. '30s', '5m', '1h')");
+    process::exit(1);
+  });
+
+  Duration::from_secs(value * multiplier)
 }
 
 fn main() {
@@ -87,23 +152,93 @@ fn main() {
   let _ = control::set_virtual_terminal(true);
 
   if cli.list_tags {
-    tags::list_benchmark_file_tags(&cli.benchmark);
+    let benchmark = cli.benchmark.as_deref().unwrap_or_else(|| {
+      eprintln!("error: --list-tags requires --benchmark");
+      process::exit(1);
+    });
+    tags::list_benchmark_file_tags(benchmark);
     process::exit(0);
   };
 
   let tags = tags::Tags::new(cli.tags.as_deref(), cli.skip_tags.as_deref());
 
   if cli.list_tasks {
-    tags::list_benchmark_file_tasks(&cli.benchmark, &tags);
+    let benchmark = cli.benchmark.as_deref().unwrap_or_else(|| {
+      eprintln!("error: --list-tasks requires --benchmark");
+      process::exit(1);
+    });
+    tags::list_benchmark_file_tasks(benchmark, &tags);
     process::exit(0);
   };
 
-  let benchmark_result = benchmark::execute(&cli.benchmark, cli.report.as_deref(), cli.relaxed_interpolations, cli.no_check_certificate, cli.quiet, cli.nanosec, cli.timeout.as_deref(), cli.verbose, &tags);
+  let timeout = cli.timeout.as_deref().map_or(10, |t| t.parse().unwrap_or(10));
+
+  // Feature f0001 — build RunOptions from either `run` subcommand or legacy flat-flags
+  let options = match cli.command {
+    Some(Commands::Run(ref run_args)) => {
+      let base_url = run_args.base_url.clone().or_else(|| run_args.url.clone());
+
+      if cli.benchmark.is_none() && run_args.url.is_none() {
+        eprintln!("error: either a URL or --benchmark is required");
+        eprintln!("usage: driller run <URL>");
+        eprintln!("       driller run --benchmark <FILE>");
+        process::exit(1);
+      }
+
+      RunOptions {
+        benchmark_path: cli.benchmark.clone(),
+        report_path: cli.report.clone(),
+        base_url,
+        concurrency: run_args.concurrency,
+        iterations: run_args.iterations,
+        duration: run_args.duration.as_deref().map(parse_duration),
+        rampup: run_args.rampup,
+        relaxed_interpolations: cli.relaxed_interpolations,
+        no_check_certificate: cli.no_check_certificate,
+        quiet: cli.quiet,
+        nanosec: cli.nanosec,
+        timeout,
+        verbose: cli.verbose,
+      }
+    }
+    None => {
+      if cli.benchmark.is_none() {
+        eprintln!("error: --benchmark is required (or use `driller run <URL>`)");
+        process::exit(1);
+      }
+
+      RunOptions {
+        benchmark_path: cli.benchmark.clone(),
+        report_path: cli.report.clone(),
+        base_url: None,
+        concurrency: None,
+        iterations: None,
+        duration: None,
+        rampup: None,
+        relaxed_interpolations: cli.relaxed_interpolations,
+        no_check_certificate: cli.no_check_certificate,
+        quiet: cli.quiet,
+        nanosec: cli.nanosec,
+        timeout,
+        verbose: cli.verbose,
+      }
+    }
+  };
+
+  let benchmark_result = benchmark::execute(&options, &tags);
   let list_reports = benchmark_result.reports;
   let duration = benchmark_result.duration;
 
   show_stats(&list_reports, cli.stats, cli.nanosec, duration);
-  compare_benchmark(&list_reports, cli.compare.as_deref(), cli.threshold.as_deref());
+
+  // Feature f0001 — threshold parsing moved to CLI boundary
+  let threshold = cli.threshold.as_deref().map(|t| {
+    t.parse::<f64>().unwrap_or_else(|_| {
+      eprintln!("error: --threshold must be a number in ms");
+      process::exit(1);
+    })
+  });
+  compare_benchmark(&list_reports, cli.compare.as_deref(), threshold);
 
   process::exit(0)
 }
@@ -212,7 +347,8 @@ fn show_stats(list_reports: &[Vec<Report>], stats_option: bool, nanosec: bool, d
   println!("{:width2$} {}", "99.9'th percentile".yellow(), format_time(global_stats.value_at_quantile(0.999), nanosec).purple(), width2 = 25);
 }
 
-fn compare_benchmark(list_reports: &[Vec<Report>], compare_path_option: Option<&str>, threshold_option: Option<&str>) {
+// Feature f0001 — threshold parsed at CLI boundary, passed as f64
+fn compare_benchmark(list_reports: &[Vec<Report>], compare_path_option: Option<&str>, threshold_option: Option<f64>) {
   if let Some(compare_path) = compare_path_option {
     if let Some(threshold) = threshold_option {
       let compare_result = checker::compare(list_reports, compare_path, threshold);
@@ -222,7 +358,8 @@ fn compare_benchmark(list_reports: &[Vec<Report>], compare_path_option: Option<&
         Err(_) => process::exit(1),
       }
     } else {
-      panic!("Threshold needed!");
+      eprintln!("error: --threshold is required when using --compare");
+      process::exit(1);
     }
   }
 }
@@ -273,5 +410,124 @@ mod tests {
     assert_eq!(stats.total_requests, 3);
     assert_eq!(stats.successful_requests, 1);
     assert_eq!(stats.failed_requests, 2);
+  }
+
+  #[test]
+  fn parse_duration_seconds() {
+    assert_eq!(parse_duration("30s"), Duration::from_secs(30));
+  }
+
+  #[test]
+  fn parse_duration_minutes() {
+    assert_eq!(parse_duration("5m"), Duration::from_secs(300));
+  }
+
+  #[test]
+  fn parse_duration_hours() {
+    assert_eq!(parse_duration("1h"), Duration::from_secs(3600));
+  }
+
+  #[test]
+  fn parse_duration_plain_number() {
+    assert_eq!(parse_duration("60"), Duration::from_secs(60));
+  }
+
+  #[test]
+  fn parse_duration_whitespace_trimmed() {
+    assert_eq!(parse_duration("  30s  "), Duration::from_secs(30));
+  }
+
+  // -- CLI argument parsing ---------------------------------------------------
+
+  #[test]
+  fn cli_legacy_benchmark_flag() {
+    let cli = Cli::try_parse_from(["driller", "--benchmark", "bench.yml"]).unwrap();
+    assert_eq!(cli.benchmark.as_deref(), Some("bench.yml"));
+    assert!(cli.command.is_none());
+  }
+
+  #[test]
+  fn cli_run_with_url() {
+    let cli = Cli::try_parse_from(["driller", "run", "http://example.com"]).unwrap();
+    match cli.command {
+      Some(Commands::Run(ref args)) => {
+        assert_eq!(args.url.as_deref(), Some("http://example.com"));
+      }
+      _ => panic!("expected Run command"),
+    }
+  }
+
+  #[test]
+  fn cli_run_benchmark_with_overrides() {
+    let cli = Cli::try_parse_from(["driller", "run", "--benchmark", "bench.yml", "--concurrency", "20", "--iterations", "100"]).unwrap();
+    assert_eq!(cli.benchmark.as_deref(), Some("bench.yml"));
+    match cli.command {
+      Some(Commands::Run(ref args)) => {
+        assert_eq!(args.concurrency, Some(20));
+        assert_eq!(args.iterations, Some(100));
+      }
+      _ => panic!("expected Run command"),
+    }
+  }
+
+  #[test]
+  fn cli_run_duration_and_concurrency() {
+    let cli = Cli::try_parse_from(["driller", "run", "http://example.com", "--duration", "30s", "--concurrency", "10"]).unwrap();
+    match cli.command {
+      Some(Commands::Run(ref args)) => {
+        assert_eq!(args.duration.as_deref(), Some("30s"));
+        assert_eq!(args.concurrency, Some(10));
+      }
+      _ => panic!("expected Run command"),
+    }
+  }
+
+  #[test]
+  fn cli_run_duration_iterations_conflict() {
+    let result = Cli::try_parse_from(["driller", "run", "http://example.com", "--duration", "30s", "--iterations", "10"]);
+    assert!(result.is_err());
+  }
+
+  #[test]
+  fn cli_run_global_flags_after_subcommand() {
+    let cli = Cli::try_parse_from(["driller", "run", "http://example.com", "--stats", "--quiet"]).unwrap();
+    assert!(cli.stats);
+    assert!(cli.quiet);
+  }
+
+  #[test]
+  fn cli_run_base_url_override() {
+    let cli = Cli::try_parse_from(["driller", "run", "--benchmark", "bench.yml", "--base-url", "http://staging:3000"]).unwrap();
+    match cli.command {
+      Some(Commands::Run(ref args)) => {
+        assert_eq!(args.base_url.as_deref(), Some("http://staging:3000"));
+      }
+      _ => panic!("expected Run command"),
+    }
+  }
+
+  #[test]
+  fn cli_run_rampup() {
+    let cli = Cli::try_parse_from(["driller", "run", "http://example.com", "--rampup", "5", "--iterations", "10"]).unwrap();
+    match cli.command {
+      Some(Commands::Run(ref args)) => {
+        assert_eq!(args.rampup, Some(5));
+        assert_eq!(args.iterations, Some(10));
+      }
+      _ => panic!("expected Run command"),
+    }
+  }
+
+  #[test]
+  fn cli_no_args_is_valid_parse() {
+    let cli = Cli::try_parse_from(["driller"]).unwrap();
+    assert!(cli.command.is_none());
+    assert!(cli.benchmark.is_none());
+  }
+
+  #[test]
+  fn cli_stats_compare_conflict() {
+    let result = Cli::try_parse_from(["driller", "--stats", "--compare", "report.yml"]);
+    assert!(result.is_err());
   }
 }

@@ -1,12 +1,18 @@
+use std::time::Duration;
+
 use serde_yaml::Value;
 
-use crate::benchmark::Context;
+use crate::benchmark::{Context, RunOptions};
 use crate::interpolator;
 use crate::reader;
 
 const NITERATIONS: i64 = 1;
+const NCONCURRENCY: i64 = 1;
 const NRAMPUP: i64 = 0;
 
+/// Runtime configuration for a benchmark execution, assembled from
+/// hard-coded defaults, benchmark YAML values, and CLI flag overrides.
+// Feature f0001
 pub struct Config {
   pub base: String,
   pub concurrency: i64,
@@ -18,22 +24,55 @@ pub struct Config {
   pub nanosec: bool,
   pub timeout: u64,
   pub verbose: bool,
+  pub duration: Option<Duration>,
 }
 
 impl Config {
-  pub fn new(path: &str, relaxed_interpolations: bool, no_check_certificate: bool, quiet: bool, nanosec: bool, timeout: u64, verbose: bool) -> Config {
-    let config_docs = reader::read_file_as_yml(path);
-    let config_doc = &config_docs[0];
+  /// Constructs configuration using three-layer precedence:
+  /// hard-coded defaults < benchmark YAML file < CLI flags.
+  // Feature f0001
+  pub fn new(options: &RunOptions) -> Config {
+    // Layer 1: hard-coded defaults
+    let mut base = String::new();
+    let mut iterations = NITERATIONS;
+    let mut concurrency = NCONCURRENCY;
+    let mut rampup = NRAMPUP;
 
-    let context: Context = Context::new();
-    let interpolator = interpolator::Interpolator::new(&context);
+    // Layer 2: benchmark YAML file values (if a file was provided)
+    if let Some(ref path) = options.benchmark_path {
+      let config_docs = reader::read_file_as_yml(path);
+      let config_doc = &config_docs[0];
 
-    let iterations = read_i64_configuration(config_doc, &interpolator, "iterations", NITERATIONS);
-    let concurrency = read_i64_configuration(config_doc, &interpolator, "concurrency", iterations);
-    let rampup = read_i64_configuration(config_doc, &interpolator, "rampup", NRAMPUP);
-    let base = read_str_configuration(config_doc, &interpolator, "base", "");
+      let context: Context = Context::new();
+      let interpolator = interpolator::Interpolator::new(&context);
 
-    if concurrency > iterations {
+      iterations = read_i64_configuration(config_doc, &interpolator, "iterations", NITERATIONS);
+      concurrency = read_i64_configuration(config_doc, &interpolator, "concurrency", iterations);
+      rampup = read_i64_configuration(config_doc, &interpolator, "rampup", NRAMPUP);
+      base = read_str_configuration(config_doc, &interpolator, "base", "");
+    }
+
+    // Layer 3: CLI flag overrides
+    if let Some(c) = options.concurrency {
+      concurrency = c as i64;
+    }
+    if let Some(i) = options.iterations {
+      iterations = i as i64;
+    }
+    if let Some(r) = options.rampup {
+      rampup = r as i64;
+    }
+    if let Some(ref u) = options.base_url {
+      base = u.clone();
+    }
+
+    // Rampup is not meaningful in duration mode (iteration counter grows
+    // without bound, causing ever-increasing delays).
+    if options.duration.is_some() {
+      rampup = 0;
+    }
+
+    if options.duration.is_none() && concurrency > iterations {
       panic!("The concurrency can not be higher than the number of iterations")
     }
 
@@ -41,13 +80,14 @@ impl Config {
       base,
       concurrency,
       iterations,
-      relaxed_interpolations,
-      no_check_certificate,
+      relaxed_interpolations: options.relaxed_interpolations,
+      no_check_certificate: options.no_check_certificate,
       rampup,
-      quiet,
-      nanosec,
-      timeout,
-      verbose,
+      quiet: options.quiet,
+      nanosec: options.nanosec,
+      timeout: options.timeout,
+      verbose: options.verbose,
+      duration: options.duration,
     }
   }
 }
@@ -97,5 +137,202 @@ fn read_i64_configuration(config_doc: &Value, interpolator: &interpolator::Inter
 
       default
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::benchmark::RunOptions;
+  use std::io::Write;
+  use tempfile::NamedTempFile;
+
+  fn default_options() -> RunOptions {
+    RunOptions {
+      benchmark_path: None,
+      report_path: None,
+      base_url: None,
+      concurrency: None,
+      iterations: None,
+      duration: None,
+      rampup: None,
+      relaxed_interpolations: false,
+      no_check_certificate: false,
+      quiet: false,
+      nanosec: false,
+      timeout: 10,
+      verbose: false,
+    }
+  }
+
+  fn yaml_file(content: &str) -> NamedTempFile {
+    let mut f = NamedTempFile::new().unwrap();
+    write!(f, "{content}").unwrap();
+    f.flush().unwrap();
+    f
+  }
+
+  // -- Layer 1: hard-coded defaults -------------------------------------------
+
+  #[test]
+  fn defaults_without_file_or_cli() {
+    let config = Config::new(&default_options());
+    assert_eq!(config.iterations, 1);
+    assert_eq!(config.concurrency, 1);
+    assert_eq!(config.rampup, 0);
+    assert_eq!(config.base, "");
+    assert!(config.duration.is_none());
+    assert_eq!(config.timeout, 10);
+  }
+
+  // -- Layer 2: YAML file values ----------------------------------------------
+
+  #[test]
+  fn yaml_values_override_defaults() {
+    let f = yaml_file("base: http://example.com\niterations: 50\nconcurrency: 10\nrampup: 5\nplan:\n  - name: t\n    request:\n      url: /\n");
+    let options = RunOptions {
+      benchmark_path: Some(f.path().to_str().unwrap().to_string()),
+      ..default_options()
+    };
+    let config = Config::new(&options);
+    assert_eq!(config.base, "http://example.com");
+    assert_eq!(config.iterations, 50);
+    assert_eq!(config.concurrency, 10);
+    assert_eq!(config.rampup, 5);
+  }
+
+  #[test]
+  fn yaml_concurrency_defaults_to_iterations() {
+    let f = yaml_file("iterations: 50\nplan:\n  - name: t\n    request:\n      url: /\n");
+    let options = RunOptions {
+      benchmark_path: Some(f.path().to_str().unwrap().to_string()),
+      ..default_options()
+    };
+    let config = Config::new(&options);
+    assert_eq!(config.iterations, 50);
+    assert_eq!(config.concurrency, 50);
+  }
+
+  // -- Layer 3: CLI flag overrides --------------------------------------------
+
+  #[test]
+  fn cli_overrides_yaml() {
+    let f = yaml_file("base: http://file.com\niterations: 50\nconcurrency: 10\nrampup: 5\nplan:\n  - name: t\n    request:\n      url: /\n");
+    let options = RunOptions {
+      benchmark_path: Some(f.path().to_str().unwrap().to_string()),
+      base_url: Some("http://staging:3000".to_string()),
+      concurrency: Some(20),
+      iterations: Some(100),
+      rampup: Some(10),
+      ..default_options()
+    };
+    let config = Config::new(&options);
+    assert_eq!(config.base, "http://staging:3000");
+    assert_eq!(config.iterations, 100);
+    assert_eq!(config.concurrency, 20);
+    assert_eq!(config.rampup, 10);
+  }
+
+  #[test]
+  fn partial_cli_override_preserves_yaml() {
+    let f = yaml_file("base: http://file.com\niterations: 100\nconcurrency: 50\nrampup: 5\nplan:\n  - name: t\n    request:\n      url: /\n");
+    let options = RunOptions {
+      benchmark_path: Some(f.path().to_str().unwrap().to_string()),
+      concurrency: Some(20),
+      ..default_options()
+    };
+    let config = Config::new(&options);
+    assert_eq!(config.concurrency, 20);
+    assert_eq!(config.iterations, 100);
+    assert_eq!(config.rampup, 5);
+    assert_eq!(config.base, "http://file.com");
+  }
+
+  #[test]
+  fn cli_overrides_without_yaml() {
+    let options = RunOptions {
+      base_url: Some("http://test:8080".to_string()),
+      concurrency: Some(5),
+      iterations: Some(10),
+      rampup: Some(2),
+      ..default_options()
+    };
+    let config = Config::new(&options);
+    assert_eq!(config.base, "http://test:8080");
+    assert_eq!(config.iterations, 10);
+    assert_eq!(config.concurrency, 5);
+    assert_eq!(config.rampup, 2);
+  }
+
+  // -- Duration mode ----------------------------------------------------------
+
+  #[test]
+  fn duration_zeroes_rampup() {
+    let options = RunOptions {
+      rampup: Some(10),
+      duration: Some(Duration::from_secs(30)),
+      ..default_options()
+    };
+    let config = Config::new(&options);
+    assert_eq!(config.rampup, 0);
+    assert_eq!(config.duration, Some(Duration::from_secs(30)));
+  }
+
+  #[test]
+  fn duration_mode_allows_high_concurrency() {
+    let options = RunOptions {
+      concurrency: Some(10),
+      duration: Some(Duration::from_secs(30)),
+      ..default_options()
+    };
+    let config = Config::new(&options);
+    assert_eq!(config.concurrency, 10);
+    assert_eq!(config.iterations, 1);
+  }
+
+  #[test]
+  fn duration_propagated_to_config() {
+    let dur = Duration::from_secs(60);
+    let options = RunOptions {
+      duration: Some(dur),
+      ..default_options()
+    };
+    let config = Config::new(&options);
+    assert_eq!(config.duration, Some(dur));
+  }
+
+  // -- Validation -------------------------------------------------------------
+
+  #[test]
+  #[should_panic(expected = "concurrency can not be higher")]
+  fn concurrency_exceeds_iterations_panics() {
+    let options = RunOptions {
+      concurrency: Some(10),
+      iterations: Some(5),
+      ..default_options()
+    };
+    Config::new(&options);
+  }
+
+  // -- Boolean / scalar pass-through ------------------------------------------
+
+  #[test]
+  fn boolean_flags_pass_through() {
+    let options = RunOptions {
+      relaxed_interpolations: true,
+      no_check_certificate: true,
+      quiet: true,
+      nanosec: true,
+      verbose: true,
+      timeout: 42,
+      ..default_options()
+    };
+    let config = Config::new(&options);
+    assert!(config.relaxed_interpolations);
+    assert!(config.no_check_certificate);
+    assert!(config.quiet);
+    assert!(config.nanosec);
+    assert!(config.verbose);
+    assert_eq!(config.timeout, 42);
   }
 }
