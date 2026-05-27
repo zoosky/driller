@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-05-28
+
+### Added
+- `driller run <URL>` subcommand for ad-hoc HTTP testing without a benchmark file
+- CLI override flags: `--concurrency`, `--iterations`, `--duration`, `--rampup`, `--base-url`
+- Duration-based runs (`--duration 30s`) that loop the plan for a fixed wall-clock period
+- Three-layer config precedence: hard-coded defaults < YAML file < CLI flags
+- `docs/cli-reference.md` with full CLI documentation
+
+### Changed
+- `benchmark::execute()` accepts a `RunOptions` struct instead of positional parameters
+- `Tags` struct owns its data (removed lifetime parameter)
+- Synthetic plan built programmatically via `Request::simple_get` instead of YAML construction
+- Duration loop bounded by `tokio::time::timeout` to prevent overshooting the deadline
+- Terminal output colors changed from purple to cyan
+- Concurrency > iterations validation produces a clear error message instead of a panic
+- `checker::compare()` accepts `threshold` as `f64` (parsed at CLI boundary)
+- Positional URL split into base and path components for correct request targeting
+- README quick-start section tightened; example updated to use `run` subcommand
+- Upgrade `reqwest` 0.12 to 0.13, bump MSRV to 1.95
+- Upgrade `colored` 2 to 3, `rand` 0.8 to 0.10
+- Add `cargo-deny` configuration for license and advisory auditing
+
+### Fixed
+- Histogram panic on response durations above 3.6 seconds (upper bound raised to 1 hour)
+- Duration mode no longer overshoots by a full batch latency
+
+### Added (infrastructure)
+- SECURITY.md, CONTRIBUTING.md, issue templates, CODEOWNERS
+- Cross-platform release workflow (Linux, macOS, Windows)
+- Security audit and cargo-deny CI checks
+
 ## [0.10.0-alpha.2] - 2026-05-25
 
 ### Changed
@@ -39,6 +71,7 @@ See [FORK.md](./FORK.md) for rationale and migration instructions.
 - Benchmark YAML format and CLI flags are fully compatible with drill 0.9.0
 - Full upstream git history preserved
 
-[Unreleased]: https://github.com/zoosky/driller/compare/0.10.0-alpha.2...HEAD
+[Unreleased]: https://github.com/zoosky/driller/compare/0.10.0...HEAD
+[0.10.0]: https://github.com/zoosky/driller/compare/0.10.0-alpha.2...0.10.0
 [0.10.0-alpha.2]: https://github.com/zoosky/driller/compare/0.10.0-alpha.1...0.10.0-alpha.2
 [0.10.0-alpha.1]: https://github.com/zoosky/driller/releases/tag/0.10.0-alpha.1
