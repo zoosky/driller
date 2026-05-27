@@ -13,6 +13,14 @@ Ansible-inspired YAML syntax. Friendly fork of
 
 ```bash
 cargo install driller
+
+# Ad-hoc test against a URL
+driller run http://localhost:9000/api/users --stats
+
+# Run a benchmark file
+driller run --benchmark benchmark.yml --stats
+
+# Legacy form (still supported)
 driller --benchmark benchmark.yml --stats
 ```
 
@@ -68,6 +76,12 @@ For the full benchmark file syntax, see [SYNTAX.md](./SYNTAX.md).
 
 ## Features
 
+- **Ad-hoc URL testing** -- `driller run <URL>` sends requests without a
+  benchmark file.
+- **CLI overrides** -- `--concurrency`, `--iterations`, `--duration`,
+  `--rampup`, and `--base-url` override values from the benchmark file.
+- **Duration-based runs** -- `--duration 30s` loops the plan for a fixed
+  wall-clock period instead of a fixed iteration count.
 - **Concurrency and ramp-up** -- control parallel iterations and ramp-up time.
 - **Dynamic interpolation** -- URLs, headers, and bodies can reference
   variables, CSV data, environment variables, and previous responses.
@@ -87,28 +101,77 @@ For the full benchmark file syntax, see [SYNTAX.md](./SYNTAX.md).
 
 ## CLI reference
 
-```
-Usage: driller [OPTIONS] --benchmark <BENCHMARK>
+### `driller run` -- execute a benchmark or ad-hoc request
 
-Options:
-  -b, --benchmark <BENCHMARK>   Sets the benchmark file
+```
+Usage: driller run [OPTIONS] [URL]
+
+Arguments:
+  [URL]  Target URL for ad-hoc testing (creates a synthetic GET request)
+
+Run-specific options:
+  -u, --base-url <URL>           Override the base URL from the benchmark file
+  -p, --concurrency <N>          Number of concurrent requests [default: 1]
+  -i, --iterations <N>           Number of iterations [default: 1]
+  -d, --duration <DURATION>      Run for a fixed wall-clock duration (e.g. "30s", "5m", "1h")
+  -e, --rampup <N>               Ramp-up time in seconds [default: 0]
+```
+
+`--duration` and `--iterations` are mutually exclusive. When neither is given,
+the default is 1 iteration.
+
+When both a URL and `--benchmark` are provided, the benchmark file supplies the
+plan and the URL sets the base URL.
+
+### Examples
+
+```bash
+# Quick smoke test
+driller run http://localhost:3000/health
+
+# 10 concurrent users, 100 total iterations
+driller run http://localhost:3000/api -p 10 -i 100 --stats
+
+# Run a benchmark file for 60 seconds with overridden concurrency
+driller run --benchmark bench.yml --duration 60s --concurrency 20 --stats
+
+# Override the base URL to point at staging
+driller run --benchmark bench.yml --base-url http://staging:3000 --stats
+```
+
+### Global options
+
+These flags work with both `driller run` and the legacy `driller --benchmark`
+form:
+
+```
+  -b, --benchmark <FILE>        Sets the benchmark file
   -s, --stats                   Shows request statistics
-  -r, --report <REPORT>         Sets a report file
-  -c, --compare <COMPARE>       Sets a compare file
-  -t, --threshold <THRESHOLD>   Sets a threshold value in ms amongst the compared file
-      --relaxed-interpolations  Do not panic if an interpolation is not present. (Not recommended)
-      --no-check-certificate    Disables SSL certification check. (Not recommended)
-      --tags <TAGS>             Tags to include
-      --skip-tags <SKIP_TAGS>   Tags to exclude
+  -r, --report <FILE>           Sets a report output file
+  -c, --compare <FILE>          Sets a comparison baseline file
+  -t, --threshold <MS>          Threshold in ms for comparison
+      --relaxed-interpolations  Do not panic on missing interpolations
+      --no-check-certificate    Disables SSL certificate verification
+      --tags <TAGS>             Comma-separated tags to include
+      --skip-tags <TAGS>        Comma-separated tags to exclude
       --list-tags               List all benchmark tags
-      --list-tasks              List benchmark tasks (executes --tags/--skip-tags filter)
+      --list-tasks              List benchmark tasks (applies tag filters)
   -q, --quiet                   Disables output
-  -o, --timeout <TIMEOUT>       Set timeout in seconds for all requests
+  -o, --timeout <SECONDS>       Request timeout in seconds [default: 10]
   -n, --nanosec                 Shows statistics in nanoseconds
   -v, --verbose                 Toggle verbose output
   -h, --help                    Print help
   -V, --version                 Print version
 ```
+
+### Configuration precedence
+
+When using `driller run` with a benchmark file, values are resolved in three
+layers (last wins):
+
+1. **Defaults** -- concurrency=1, iterations=1, rampup=0
+2. **Benchmark YAML** -- values from the file override defaults
+3. **CLI flags** -- `--concurrency`, `--iterations`, etc. override the file
 
 ## Building from source
 
