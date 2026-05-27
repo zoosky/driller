@@ -1,6 +1,6 @@
 [package]
 name = "driller"
-version = "0.10.0-alpha.4"
+version = "0.10.0"
 authors = ["Ferran Basora <fcsonline@gmail.com>", "Andreas Kapp <zoosky@gmail.com>"]
 description = "Driller is a HTTP load testing application written in Rust inspired by Ansible syntax. Friendly fork of fcsonline/drill."
 repository = "https://github.com/zoosky/driller"
