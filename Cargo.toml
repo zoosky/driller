@@ -7,7 +7,7 @@ repository = "https://github.com/zoosky/driller"
 keywords = ["performance", "http", "ansible", "jmeter"]
 license = "GPL-3.0"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.95"
 exclude = [
     ".github/",
     ".gitignore",
