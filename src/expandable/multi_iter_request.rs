@@ -49,11 +49,9 @@ pub fn expand(item: &Value, benchmark: &mut Benchmark) {
     if stop > start && start > 0 {
       let mut with_items: Vec<i64> = (start..stop).step_by(step as usize).collect();
 
-      if let Some(shuffle) = item.get("shuffle").and_then(|v| v.as_bool()) {
-        if shuffle {
-          let mut rng = rng();
-          with_items.shuffle(&mut rng);
-        }
+      if let Some(true) = item.get("shuffle").and_then(|v| v.as_bool()) {
+        let mut rng = rng();
+        with_items.shuffle(&mut rng);
       }
 
       if let Some(pick) = item.get("pick").and_then(|v| v.as_i64()) {
