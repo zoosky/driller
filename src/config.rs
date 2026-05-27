@@ -1,3 +1,4 @@
+use std::process;
 use std::time::Duration;
 
 use serde_yaml::Value;
@@ -12,7 +13,6 @@ const NRAMPUP: i64 = 0;
 
 /// Runtime configuration for a benchmark execution, assembled from
 /// hard-coded defaults, benchmark YAML values, and CLI flag overrides.
-// Feature f0001
 pub struct Config {
   pub base: String,
   pub concurrency: i64,
@@ -28,9 +28,15 @@ pub struct Config {
 }
 
 impl Config {
+  fn validate(concurrency: i64, iterations: i64, duration: Option<Duration>) -> Result<(), String> {
+    if duration.is_none() && concurrency > iterations {
+      return Err("the concurrency can not be higher than the number of iterations".to_string());
+    }
+    Ok(())
+  }
+
   /// Constructs configuration using three-layer precedence:
   /// hard-coded defaults < benchmark YAML file < CLI flags.
-  // Feature f0001
   pub fn new(options: &RunOptions) -> Config {
     // Layer 1: hard-coded defaults
     let mut base = String::new();
@@ -72,8 +78,9 @@ impl Config {
       rampup = 0;
     }
 
-    if options.duration.is_none() && concurrency > iterations {
-      panic!("The concurrency can not be higher than the number of iterations")
+    if let Err(msg) = Self::validate(concurrency, iterations, options.duration) {
+      eprintln!("error: {msg}");
+      process::exit(1);
     }
 
     Config {
@@ -152,6 +159,7 @@ mod tests {
       benchmark_path: None,
       report_path: None,
       base_url: None,
+      url_path: None,
       concurrency: None,
       iterations: None,
       duration: None,
@@ -162,6 +170,7 @@ mod tests {
       nanosec: false,
       timeout: 10,
       verbose: false,
+      tags: crate::tags::Tags::new(None, None),
     }
   }
 
@@ -304,14 +313,18 @@ mod tests {
   // -- Validation -------------------------------------------------------------
 
   #[test]
-  #[should_panic(expected = "concurrency can not be higher")]
-  fn concurrency_exceeds_iterations_panics() {
-    let options = RunOptions {
-      concurrency: Some(10),
-      iterations: Some(5),
-      ..default_options()
-    };
-    Config::new(&options);
+  fn concurrency_exceeds_iterations_is_error() {
+    assert!(Config::validate(10, 5, None).is_err());
+  }
+
+  #[test]
+  fn concurrency_exceeds_iterations_ok_with_duration() {
+    assert!(Config::validate(10, 5, Some(Duration::from_secs(30))).is_ok());
+  }
+
+  #[test]
+  fn concurrency_within_iterations_ok() {
+    assert!(Config::validate(5, 10, None).is_ok());
   }
 
   // -- Boolean / scalar pass-through ------------------------------------------

@@ -85,7 +85,7 @@ struct Cli {
   verbose: bool,
 }
 
-// Feature f0001
+/// Available subcommands for the driller CLI.
 #[derive(Subcommand)]
 enum Commands {
   /// Execute a benchmark or ad-hoc HTTP request
@@ -93,7 +93,6 @@ enum Commands {
 }
 
 /// CLI flags specific to the `run` subcommand.
-// Feature f0001
 #[derive(Args)]
 struct RunArgs {
   /// Target URL for ad-hoc testing (creates a synthetic GET request)
@@ -124,7 +123,6 @@ struct RunArgs {
 ///
 /// Accepts suffixes: `s` (seconds), `m` (minutes), `h` (hours).
 /// Plain numbers are treated as seconds.
-// Feature f0001
 fn parse_duration(s: &str) -> Duration {
   let s = s.trim();
   let (num_part, multiplier) = if let Some(n) = s.strip_suffix('s') {
@@ -143,6 +141,19 @@ fn parse_duration(s: &str) -> Duration {
   });
 
   Duration::from_secs(value * multiplier)
+}
+
+/// Splits a URL into its base (scheme + authority) and path components.
+fn split_url(url: &str) -> (String, String) {
+  if let Some(scheme_end) = url.find("://") {
+    let after_scheme = &url[scheme_end + 3..];
+    if let Some(path_start) = after_scheme.find('/') {
+      let base = &url[..scheme_end + 3 + path_start];
+      let path = &after_scheme[path_start..];
+      return (base.to_string(), path.to_string());
+    }
+  }
+  (url.to_string(), "/".to_string())
 }
 
 fn main() {
@@ -173,10 +184,14 @@ fn main() {
 
   let timeout = cli.timeout.as_deref().map_or(10, |t| t.parse().unwrap_or(10));
 
-  // Feature f0001 — build RunOptions from either `run` subcommand or legacy flat-flags
   let options = match cli.command {
     Some(Commands::Run(ref run_args)) => {
-      let base_url = run_args.base_url.clone().or_else(|| run_args.url.clone());
+      let (base_url, url_path) = if let Some(ref url) = run_args.url {
+        let (base, path) = split_url(url);
+        (run_args.base_url.clone().or(Some(base)), Some(path))
+      } else {
+        (run_args.base_url.clone(), None)
+      };
 
       if cli.benchmark.is_none() && run_args.url.is_none() {
         eprintln!("error: either a URL or --benchmark is required");
@@ -189,6 +204,7 @@ fn main() {
         benchmark_path: cli.benchmark.clone(),
         report_path: cli.report.clone(),
         base_url,
+        url_path,
         concurrency: run_args.concurrency,
         iterations: run_args.iterations,
         duration: run_args.duration.as_deref().map(parse_duration),
@@ -199,6 +215,7 @@ fn main() {
         nanosec: cli.nanosec,
         timeout,
         verbose: cli.verbose,
+        tags,
       }
     }
     None => {
@@ -211,6 +228,7 @@ fn main() {
         benchmark_path: cli.benchmark.clone(),
         report_path: cli.report.clone(),
         base_url: None,
+        url_path: None,
         concurrency: None,
         iterations: None,
         duration: None,
@@ -221,17 +239,17 @@ fn main() {
         nanosec: cli.nanosec,
         timeout,
         verbose: cli.verbose,
+        tags,
       }
     }
   };
 
-  let benchmark_result = benchmark::execute(&options, &tags);
+  let benchmark_result = benchmark::execute(&options);
   let list_reports = benchmark_result.reports;
   let duration = benchmark_result.duration;
 
   show_stats(&list_reports, cli.stats, cli.nanosec, duration);
 
-  // Feature f0001 — threshold parsing moved to CLI boundary
   let threshold = cli.threshold.as_deref().map(|t| {
     t.parse::<f64>().unwrap_or_else(|_| {
       eprintln!("error: --threshold must be a number in ms");
@@ -317,15 +335,15 @@ fn show_stats(list_reports: &[Vec<Report>], stats_option: bool, nanosec: bool, d
   for (name, reports) in group_by_name {
     let substats = compute_stats(&reports);
     println!();
-    println!("{:width$} {:width2$} {}", name.green(), "Total requests".yellow(), substats.total_requests.to_string().purple(), width = 25, width2 = 25);
-    println!("{:width$} {:width2$} {}", name.green(), "Successful requests".yellow(), substats.successful_requests.to_string().purple(), width = 25, width2 = 25);
-    println!("{:width$} {:width2$} {}", name.green(), "Failed requests".yellow(), substats.failed_requests.to_string().purple(), width = 25, width2 = 25);
-    println!("{:width$} {:width2$} {}", name.green(), "Median time per request".yellow(), format_time(substats.median_duration(), nanosec).purple(), width = 25, width2 = 25);
-    println!("{:width$} {:width2$} {}", name.green(), "Average time per request".yellow(), format_time(substats.mean_duration(), nanosec).purple(), width = 25, width2 = 25);
-    println!("{:width$} {:width2$} {}", name.green(), "Sample standard deviation".yellow(), format_time(substats.stdev_duration(), nanosec).purple(), width = 25, width2 = 25);
-    println!("{:width$} {:width2$} {}", name.green(), "99.0'th percentile".yellow(), format_time(substats.value_at_quantile(0.99), nanosec).purple(), width = 25, width2 = 25);
-    println!("{:width$} {:width2$} {}", name.green(), "99.5'th percentile".yellow(), format_time(substats.value_at_quantile(0.995), nanosec).purple(), width = 25, width2 = 25);
-    println!("{:width$} {:width2$} {}", name.green(), "99.9'th percentile".yellow(), format_time(substats.value_at_quantile(0.999), nanosec).purple(), width = 25, width2 = 25);
+    println!("{:width$} {:width2$} {}", name.green(), "Total requests".yellow(), substats.total_requests.to_string().cyan(), width = 25, width2 = 25);
+    println!("{:width$} {:width2$} {}", name.green(), "Successful requests".yellow(), substats.successful_requests.to_string().cyan(), width = 25, width2 = 25);
+    println!("{:width$} {:width2$} {}", name.green(), "Failed requests".yellow(), substats.failed_requests.to_string().cyan(), width = 25, width2 = 25);
+    println!("{:width$} {:width2$} {}", name.green(), "Median time per request".yellow(), format_time(substats.median_duration(), nanosec).cyan(), width = 25, width2 = 25);
+    println!("{:width$} {:width2$} {}", name.green(), "Average time per request".yellow(), format_time(substats.mean_duration(), nanosec).cyan(), width = 25, width2 = 25);
+    println!("{:width$} {:width2$} {}", name.green(), "Sample standard deviation".yellow(), format_time(substats.stdev_duration(), nanosec).cyan(), width = 25, width2 = 25);
+    println!("{:width$} {:width2$} {}", name.green(), "99.0'th percentile".yellow(), format_time(substats.value_at_quantile(0.99), nanosec).cyan(), width = 25, width2 = 25);
+    println!("{:width$} {:width2$} {}", name.green(), "99.5'th percentile".yellow(), format_time(substats.value_at_quantile(0.995), nanosec).cyan(), width = 25, width2 = 25);
+    println!("{:width$} {:width2$} {}", name.green(), "99.9'th percentile".yellow(), format_time(substats.value_at_quantile(0.999), nanosec).cyan(), width = 25, width2 = 25);
   }
 
   // compute global stats
@@ -334,20 +352,19 @@ fn show_stats(list_reports: &[Vec<Report>], stats_option: bool, nanosec: bool, d
   let requests_per_second = global_stats.total_requests as f64 / duration;
 
   println!();
-  println!("{:width2$} {} {}", "Time taken for tests".yellow(), format!("{duration:.1}").purple(), "seconds".purple(), width2 = 25);
-  println!("{:width2$} {}", "Total requests".yellow(), global_stats.total_requests.to_string().purple(), width2 = 25);
-  println!("{:width2$} {}", "Successful requests".yellow(), global_stats.successful_requests.to_string().purple(), width2 = 25);
-  println!("{:width2$} {}", "Failed requests".yellow(), global_stats.failed_requests.to_string().purple(), width2 = 25);
-  println!("{:width2$} {} {}", "Requests per second".yellow(), format!("{requests_per_second:.2}").purple(), "[#/sec]".purple(), width2 = 25);
-  println!("{:width2$} {}", "Median time per request".yellow(), format_time(global_stats.median_duration(), nanosec).purple(), width2 = 25);
-  println!("{:width2$} {}", "Average time per request".yellow(), format_time(global_stats.mean_duration(), nanosec).purple(), width2 = 25);
-  println!("{:width2$} {}", "Sample standard deviation".yellow(), format_time(global_stats.stdev_duration(), nanosec).purple(), width2 = 25);
-  println!("{:width2$} {}", "99.0'th percentile".yellow(), format_time(global_stats.value_at_quantile(0.99), nanosec).purple(), width2 = 25);
-  println!("{:width2$} {}", "99.5'th percentile".yellow(), format_time(global_stats.value_at_quantile(0.995), nanosec).purple(), width2 = 25);
-  println!("{:width2$} {}", "99.9'th percentile".yellow(), format_time(global_stats.value_at_quantile(0.999), nanosec).purple(), width2 = 25);
+  println!("{:width2$} {} {}", "Time taken for tests".yellow(), format!("{duration:.1}").cyan(), "seconds".cyan(), width2 = 25);
+  println!("{:width2$} {}", "Total requests".yellow(), global_stats.total_requests.to_string().cyan(), width2 = 25);
+  println!("{:width2$} {}", "Successful requests".yellow(), global_stats.successful_requests.to_string().cyan(), width2 = 25);
+  println!("{:width2$} {}", "Failed requests".yellow(), global_stats.failed_requests.to_string().cyan(), width2 = 25);
+  println!("{:width2$} {} {}", "Requests per second".yellow(), format!("{requests_per_second:.2}").cyan(), "[#/sec]".cyan(), width2 = 25);
+  println!("{:width2$} {}", "Median time per request".yellow(), format_time(global_stats.median_duration(), nanosec).cyan(), width2 = 25);
+  println!("{:width2$} {}", "Average time per request".yellow(), format_time(global_stats.mean_duration(), nanosec).cyan(), width2 = 25);
+  println!("{:width2$} {}", "Sample standard deviation".yellow(), format_time(global_stats.stdev_duration(), nanosec).cyan(), width2 = 25);
+  println!("{:width2$} {}", "99.0'th percentile".yellow(), format_time(global_stats.value_at_quantile(0.99), nanosec).cyan(), width2 = 25);
+  println!("{:width2$} {}", "99.5'th percentile".yellow(), format_time(global_stats.value_at_quantile(0.995), nanosec).cyan(), width2 = 25);
+  println!("{:width2$} {}", "99.9'th percentile".yellow(), format_time(global_stats.value_at_quantile(0.999), nanosec).cyan(), width2 = 25);
 }
 
-// Feature f0001 — threshold parsed at CLI boundary, passed as f64
 fn compare_benchmark(list_reports: &[Vec<Report>], compare_path_option: Option<&str>, threshold_option: Option<f64>) {
   if let Some(compare_path) = compare_path_option {
     if let Some(threshold) = threshold_option {
@@ -529,5 +546,26 @@ mod tests {
   fn cli_stats_compare_conflict() {
     let result = Cli::try_parse_from(["driller", "--stats", "--compare", "report.yml"]);
     assert!(result.is_err());
+  }
+
+  #[test]
+  fn split_url_with_path() {
+    let (base, path) = split_url("http://example.com/api/users");
+    assert_eq!(base, "http://example.com");
+    assert_eq!(path, "/api/users");
+  }
+
+  #[test]
+  fn split_url_no_path() {
+    let (base, path) = split_url("http://example.com");
+    assert_eq!(base, "http://example.com");
+    assert_eq!(path, "/");
+  }
+
+  #[test]
+  fn split_url_with_port_and_path() {
+    let (base, path) = split_url("http://localhost:3000/health");
+    assert_eq!(base, "http://localhost:3000");
+    assert_eq!(path, "/health");
   }
 }

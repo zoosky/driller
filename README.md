@@ -14,14 +14,8 @@ Ansible-inspired YAML syntax. Friendly fork of
 ```bash
 cargo install driller
 
-# Ad-hoc test against a URL
 driller run http://localhost:9000/api/users --stats
-
-# Run a benchmark file
 driller run --benchmark benchmark.yml --stats
-
-# Legacy form (still supported)
-driller --benchmark benchmark.yml --stats
 ```
 
 Or grab a binary from the
@@ -69,7 +63,7 @@ plan:
 Run it:
 
 ```bash
-driller --benchmark benchmark.yml --stats
+driller run --benchmark benchmark.yml --stats
 ```
 
 For the full benchmark file syntax, see [SYNTAX.md](./SYNTAX.md).
