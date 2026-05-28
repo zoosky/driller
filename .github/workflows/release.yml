@@ -5,8 +5,11 @@ on:
     types: [published]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  release:
+  upload-assets:
     name: release ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -15,23 +18,27 @@ jobs:
         include:
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
-            archive: tar.gz
+            build-tool: cross
           - target: x86_64-apple-darwin
-            os: macos-latest
-            archive: tar.gz
+            os: macos-13
+            build-tool: cargo
           - target: aarch64-apple-darwin
             os: macos-latest
-            archive: tar.gz
+            build-tool: cargo
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            archive: zip
+            build-tool: cargo
     steps:
       - uses: actions/checkout@v4
-      - name: Compile and release
-        uses: rust-build/rust-build.action@v1.4.5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RUSTTARGET: ${{ matrix.target }}
-          TOOLCHAIN_VERSION: 1.95.0
-          EXTRA_FILES: "README.md"
-          ARCHIVE_TYPES: ${{ matrix.archive }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: driller
+          target: ${{ matrix.target }}
+          build-tool: ${{ matrix.build-tool }}
+          include: README.md,LICENSE,CHANGELOG.md
+          tar: unix
+          zip: windows
+          checksum: sha256

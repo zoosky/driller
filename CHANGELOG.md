@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--threshold` rejects non-numeric values at CLI parse time instead of after running the benchmark, with an error that hints at the bundled-short-flags gotcha (e.g. `-stats` is parsed as `-s -t ats`, not as `--stats`).
 - File-not-found and YAML/CSV parse errors in `reader.rs` are now reported as clean `error: ...` lines on stderr with exit code 1, instead of Rust panics with backtrace hints. Affects `--benchmark`, `--compare`, and any benchmark step that reads an `iterate` / `csv` source file.
 
+### Changed (release pipeline)
+- Release workflow rewritten to use `taiki-e/upload-rust-binary-action`, replacing the previous Docker-only action that failed on macOS and Windows runners. The 0.10.0 release shipped without binary assets as a result; 0.10.1 restores cross-platform artifacts for `x86_64-unknown-linux-musl`, `x86_64-apple-darwin`, `aarch64-apple-darwin`, and `x86_64-pc-windows-msvc`.
+
 ## [0.10.0] - 2026-05-28
 
 ### Added
