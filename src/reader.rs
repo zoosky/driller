@@ -2,6 +2,18 @@ use serde_yaml::{Mapping, Value};
 use std::fs::File;
 use std::io::{BufReader, prelude::*};
 use std::path::Path;
+use std::process;
+
+/// Prints `error: <msg>` to stderr and exits with status 1.
+///
+/// Used at boundaries where user-supplied paths or file contents
+/// turn out to be invalid. Avoids the Rust panic + backtrace hint
+/// that `panic!` would produce, which reads as a crash rather than
+/// a user-input problem.
+fn die(msg: impl std::fmt::Display) -> ! {
+  eprintln!("error: {msg}");
+  process::exit(1)
+}
 
 pub fn read_file(filepath: &str) -> String {
   // Create a path to the desired file
@@ -9,15 +21,12 @@ pub fn read_file(filepath: &str) -> String {
   let display = path.display();
 
   // Open the path in read-only mode, returns `io::Result<File>`
-  let mut file = match File::open(path) {
-    Err(why) => panic!("couldn't open {display}: {why}"),
-    Ok(file) => file,
-  };
+  let mut file = File::open(path).unwrap_or_else(|why| die(format!("couldn't open {display}: {why}")));
 
   // Read the file contents into a string, returns `io::Result<usize>`
   let mut content = String::new();
   if let Err(why) = file.read_to_string(&mut content) {
-    panic!("couldn't read {display}: {why}");
+    die(format!("couldn't read {display}: {why}"));
   }
 
   content
@@ -42,10 +51,7 @@ fn parse_yaml_content(content: &str) -> Vec<Value> {
               docs.push(doc);
             }
           }
-          Err(e) => {
-            eprintln!("Error parsing YAML document: {e}");
-            panic!("Failed to parse YAML: {e}");
-          }
+          Err(e) => die(format!("failed to parse YAML document: {e}")),
         }
       }
     }
@@ -61,10 +67,7 @@ fn parse_yaml_content(content: &str) -> Vec<Value> {
           docs.push(doc);
         }
       }
-      Err(e) => {
-        eprintln!("Error parsing YAML content: {e}");
-        panic!("Failed to parse YAML: {e}");
-      }
+      Err(e) => die(format!("failed to parse YAML content: {e}")),
     }
   }
 
@@ -90,14 +93,10 @@ pub fn read_yaml_doc_accessor<'a>(doc: &'a Value, accessor: Option<&str>) -> &'a
   if let Some(accessor_id) = accessor {
     match doc.get(accessor_id).and_then(|v| v.as_sequence()) {
       Some(items) => items,
-      None => {
-        println!("Node missing on config: {accessor_id}");
-        println!("Exiting.");
-        std::process::exit(1)
-      }
+      None => die(format!("node missing on config: {accessor_id}")),
     }
   } else {
-    doc.as_sequence().unwrap_or_else(|| panic!("Expected document to be a sequence, got: {doc:?}"))
+    doc.as_sequence().unwrap_or_else(|| die(format!("expected document to be a sequence, got: {doc:?}")))
   }
 }
 
@@ -105,10 +104,7 @@ pub fn read_file_as_yml_array(filepath: &str) -> Vec<Value> {
   let path = Path::new(filepath);
   let display = path.display();
 
-  let file = match File::open(path) {
-    Err(why) => panic!("couldn't open {display}: {why}"),
-    Ok(file) => file,
-  };
+  let file = File::open(path).unwrap_or_else(|why| die(format!("couldn't open {display}: {why}")));
 
   let reader = BufReader::new(file);
   let mut items = Vec::new();
@@ -131,19 +127,13 @@ pub fn read_csv_file_as_yml(filepath: &str, quote: u8) -> Vec<Value> {
   let display = path.display();
 
   // Open the path in read-only mode, returns `io::Result<File>`
-  let file = match File::open(path) {
-    Err(why) => panic!("couldn't open {display}: {why}"),
-    Ok(file) => file,
-  };
+  let file = File::open(path).unwrap_or_else(|why| die(format!("couldn't open {display}: {why}")));
 
   let mut rdr = csv::ReaderBuilder::new().has_headers(true).quote(quote).from_reader(file);
 
   let mut items = Vec::new();
 
-  let headers = match rdr.headers() {
-    Err(why) => panic!("error parsing header: {why:?}"),
-    Ok(h) => h.clone(),
-  };
+  let headers = rdr.headers().cloned().unwrap_or_else(|why| die(format!("couldn't parse CSV header in {display}: {why}")));
 
   for result in rdr.records() {
     match result {

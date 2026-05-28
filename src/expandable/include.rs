@@ -87,9 +87,13 @@ mod tests {
   }
 
   #[test]
-  #[should_panic]
+  #[should_panic(expected = "Interpolations not supported in 'include' property")]
   fn invalid_expand() {
-    let text = "---\nname: Include comment\ninclude: {{ memory }}.yml";
+    // Quoted so the YAML parser accepts the value; the bare `{{` form
+    // used to rely on a YAML parse panic, which is now a clean
+    // `process::exit(1)`. The intent of this test is to verify the
+    // interpolation guard inside `expand`, not the YAML parser.
+    let text = "---\nname: Include comment\ninclude: \"{{ memory }}.yml\"";
     let docs = crate::reader::read_file_as_yml_from_str(text);
     let doc = &docs[0];
     let mut benchmark: Benchmark = Benchmark::new();

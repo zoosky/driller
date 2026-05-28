@@ -41,8 +41,8 @@ struct Cli {
   compare: Option<String>,
 
   /// Sets a threshold value in ms amongst the compared file
-  #[arg(short, long, global = true, conflicts_with = "report")]
-  threshold: Option<String>,
+  #[arg(short, long, global = true, conflicts_with = "report", value_parser = parse_threshold)]
+  threshold: Option<f64>,
 
   /// Do not panic if an interpolation is not present. (Not recommended)
   #[arg(long, global = true)]
@@ -117,6 +117,18 @@ struct RunArgs {
   /// Ramp-up time in seconds
   #[arg(short = 'e', long)]
   rampup: Option<usize>,
+}
+
+/// Parses the `--threshold` value as milliseconds.
+///
+/// Runs at clap parse time so an invalid value fails before any benchmark
+/// executes. The error message also flags a common pitfall: a single-dash
+/// long-style flag like `-stats` is parsed by clap as the bundled shorts
+/// `-s -t ats`, which silently feeds `ats` into `--threshold`.
+fn parse_threshold(s: &str) -> Result<f64, String> {
+  s.parse::<f64>().map_err(|_| {
+    format!("'{s}' is not a number in ms.\nHint: a single-dash long flag like '-stats' is parsed as bundled shorts ('-s -t ats'), which feeds the next characters into '--threshold'. Use '--stats' (two dashes) if that is what you meant.")
+  })
 }
 
 /// Parses a human-readable duration string into a `Duration`.
@@ -250,13 +262,7 @@ fn main() {
 
   show_stats(&list_reports, cli.stats, cli.nanosec, duration);
 
-  let threshold = cli.threshold.as_deref().map(|t| {
-    t.parse::<f64>().unwrap_or_else(|_| {
-      eprintln!("error: --threshold must be a number in ms");
-      process::exit(1);
-    })
-  });
-  compare_benchmark(&list_reports, cli.compare.as_deref(), threshold);
+  compare_benchmark(&list_reports, cli.compare.as_deref(), cli.threshold);
 
   process::exit(0)
 }
@@ -546,6 +552,27 @@ mod tests {
   fn cli_stats_compare_conflict() {
     let result = Cli::try_parse_from(["driller", "--stats", "--compare", "report.yml"]);
     assert!(result.is_err());
+  }
+
+  #[test]
+  fn cli_threshold_accepts_numeric_value() {
+    let cli = Cli::try_parse_from(["driller", "--threshold", "100", "--compare", "baseline.yml"]).unwrap();
+    assert_eq!(cli.threshold, Some(100.0));
+  }
+
+  #[test]
+  fn cli_threshold_rejects_non_numeric_at_parse_time() {
+    // Regression: previously '-stats' was parsed as bundled shorts '-s -t ats',
+    // feeding 'ats' into --threshold; the parse failure only surfaced after
+    // the benchmark had already run. The value parser now rejects this up front.
+    let result = Cli::try_parse_from(["driller", "run", "http://example.com", "-stats"]);
+    let err = match result {
+      Ok(_) => panic!("expected parse error for bundled '-stats'"),
+      Err(e) => e,
+    };
+    let msg = err.to_string();
+    assert!(msg.contains("--threshold"), "error should mention --threshold, got: {msg}");
+    assert!(msg.contains("'ats'"), "error should quote the rejected value 'ats', got: {msg}");
   }
 
   #[test]
