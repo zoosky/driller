@@ -81,23 +81,6 @@ fn build_synthetic_plan(path: &str) -> Benchmark {
   vec![Box::new(actions::Request::simple_get(&name, path))]
 }
 
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn synthetic_plan_has_one_item() {
-    let plan = build_synthetic_plan("/");
-    assert_eq!(plan.len(), 1);
-  }
-
-  #[test]
-  fn synthetic_plan_preserves_path() {
-    let plan = build_synthetic_plan("/api/users");
-    assert_eq!(plan.len(), 1);
-  }
-}
-
 /// Executes a benchmark run using the provided options.
 pub fn execute(options: &RunOptions) -> BenchmarkResult {
   let config = Arc::new(Config::new(options));
@@ -187,4 +170,21 @@ pub fn execute(options: &RunOptions) -> BenchmarkResult {
       }
     }
   })
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn synthetic_plan_has_one_item() {
+    let plan = build_synthetic_plan("/");
+    assert_eq!(plan.len(), 1);
+  }
+
+  #[test]
+  fn synthetic_plan_preserves_path() {
+    let plan = build_synthetic_plan("/api/users");
+    assert_eq!(plan.len(), 1);
+  }
 }
