@@ -100,8 +100,13 @@ pub fn execute(options: &RunOptions) -> BenchmarkResult {
   println!("{} {}", "Base URL".yellow(), config.base.cyan());
   println!();
 
-  let threads = std::cmp::min(num_cpus::get(), config.concurrency as usize);
-  let rt = runtime::Builder::new_current_thread().enable_all().worker_threads(threads).build().unwrap();
+  let threads = std::cmp::min(num_cpus::get(), config.concurrency as usize).max(1);
+  let multi_thread = matches!(std::env::var("DRILLER_RUNTIME").as_deref(), Ok("multi_thread"));
+  let rt = if multi_thread {
+    runtime::Builder::new_multi_thread().enable_all().worker_threads(threads).build().unwrap()
+  } else {
+    runtime::Builder::new_current_thread().enable_all().build().unwrap()
+  };
 
   rt.block_on(async {
     let mut benchmark: Benchmark = Benchmark::new();
