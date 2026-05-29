@@ -4,10 +4,8 @@
 [![License: GPL-3.0](https://img.shields.io/crates/l/driller.svg)](./LICENSE)
 [![CI](https://github.com/zoosky/driller/actions/workflows/general.yml/badge.svg)](https://github.com/zoosky/driller/actions/workflows/general.yml)
 
-A fast, lightweight HTTP load testing tool written in Rust with an
-Ansible-inspired YAML syntax. Friendly fork of
-[fcsonline/drill](https://github.com/fcsonline/drill) -- see
-[FORK.md](./FORK.md) for background.
+A clean HTTP load-test drill. Ansible-style YAML plans, Rust runtime,
+RPS and percentiles per run -- no fancy bits.
 
 ## Quick start
 
@@ -81,7 +79,8 @@ For the full benchmark file syntax, see [SYNTAX.md](./SYNTAX.md).
   variables, CSV data, environment variables, and previous responses.
 - **Request chaining** -- assign response data to variables and use them in
   later requests.
-- **Assertions** -- validate response status codes and body values inline.
+- **Response checks** -- `assert` plan items compare response fields against
+  expected values; a mismatch aborts the run.
 - **Multiple data sources** -- loop over inline lists, ranges,
   CSV files, or included YAML files.
 - **Statistics** -- mean, median, standard deviation, and p99/p99.5/p99.9
@@ -89,8 +88,11 @@ For the full benchmark file syntax, see [SYNTAX.md](./SYNTAX.md).
 - **Benchmark comparison** -- compare runs against a saved report with
   configurable thresholds.
 - **Tags** -- run or skip specific plan items by tag.
-- **All HTTP methods** -- GET, POST, PUT, PATCH, DELETE, HEAD.
+- **Plan introspection** -- `--list-tags` and `--list-tasks` (with tag
+  filters) dump the structure of a benchmark file without running it.
+- **Common HTTP methods** -- GET, POST, PUT, PATCH, DELETE, HEAD.
 - **Cookie propagation** -- session cookies carry across requests automatically.
+- **Request timeout** -- per-request timeout via `--timeout`; default 10s.
 - **Shell execution** -- run external commands and capture output into variables.
 
 ## CLI reference
@@ -193,6 +195,22 @@ The `example/` directory contains a small Node.js server and sample benchmark
 files. See the [example README](./example) for setup instructions.
 
 **Disclaimer:** do not run intensive benchmarks against production environments.
+
+## Similar tools
+
+Driller is one of many HTTP load testers. If you're shopping around, these are
+the usual suspects:
+
+| Tool                                                                       | Language          | Niche                                                                  |
+|----------------------------------------------------------------------------|-------------------|------------------------------------------------------------------------|
+| [ab](https://httpd.apache.org/docs/current/programs/ab.html)               | C                 | ApacheBench. Ships with Apache HTTPD; ubiquitous; no scripting.        |
+| [gatling](https://gatling.io/)                                             | Scala (JVM)       | Simulation-style DSL; rich HTML reports.                               |
+| [hey](https://github.com/rakyll/hey)                                       | Go                | Small, single-binary CLI; a spiritual successor to `ab`.               |
+| [jmeter](https://jmeter.apache.org/)                                       | Java              | GUI-driven; deep plugin ecosystem; protocols beyond HTTP.              |
+| [k6](https://github.com/grafana/k6)                                        | Go + JavaScript   | JS scripting for complex flows; first-class CI / cloud story.          |
+| [oha](https://github.com/hatoo/oha)                                        | Rust              | Real-time terminal UI with histogram and chart.                        |
+| [vegeta](https://github.com/tsenart/vegeta)                                | Go                | Constant attack-rate model; pipeline-friendly text/JSON output.        |
+| [wrk](https://github.com/wg/wrk)                                           | C                 | High-throughput single-host benchmarker; optional Lua scripting.       |
 
 ## Contributing
 

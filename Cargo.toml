@@ -2,9 +2,10 @@
 name = "driller"
 version = "0.10.1"
 authors = ["Ferran Basora <fcsonline@gmail.com>", "Andreas Kapp <zoosky@gmail.com>"]
-description = "Driller is a HTTP load testing application written in Rust inspired by Ansible syntax. Friendly fork of fcsonline/drill."
+description = "A clean HTTP load-test drill. Ansible-style YAML plans, Rust runtime, RPS and percentiles per run -- no fancy bits."
 repository = "https://github.com/zoosky/driller"
-keywords = ["performance", "http", "ansible", "jmeter"]
+keywords = ["http", "load-testing", "performance", "ansible", "jmeter"]
+categories = ["web-programming"]
 license = "GPL-3.0-only"
 edition = "2024"
 rust-version = "1.95"

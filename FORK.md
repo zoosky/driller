@@ -1,13 +1,13 @@
 # FORK.md
 
-**Driller** is a friendly fork of [fcsonline/drill](https://github.com/fcsonline/drill).
+**Driller** is a maintained fork of [fcsonline/drill](https://github.com/fcsonline/drill).
 
 ## Relationship to upstream
 
 - **Same license.** GPL-3.0-or-later. The original `LICENSE` file is preserved
   unchanged.
 - **Same DSL.** Existing `drill` benchmark YAML files work without modification.
-- **Different binary name.** `driller` everywhere -- crate, binary, User-Agent.
+- **Different binary name.** `driller` everywhere -- crate, binary, User-Agent. To prevent name clash with the driller DNS tool.
 
 ## Migration
 
