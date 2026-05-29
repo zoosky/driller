@@ -18,8 +18,24 @@ use std::collections::HashMap;
 use std::process;
 use std::time::Duration;
 
+/// Short version string: `<cargo-pkg-version> (<git-hash>)`. Bound to `-V`.
+///
+/// Compact enough to grep / paste into a comment. Sufficient to identify a
+/// build by commit when the workbench is the source of truth.
+const SHORT_VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("GIT_HASH"), ")");
+
+/// Long version string: `<cargo-pkg-version> (<git-hash> <build-time> <target>)`.
+/// Bound to `--version`.
+///
+/// The bracketed half comes from `build.rs`, so a `cargo install --path .`
+/// burns the current commit hash, build timestamp, and target triple into
+/// the binary. Useful when verifying which exact build is running -- in
+/// particular during performance investigations where install metadata
+/// alone is not enough.
+const LONG_VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("GIT_HASH"), " ", env!("BUILD_TIME"), " ", env!("BUILD_TARGET"), ")");
+
 #[derive(Parser)]
-#[command(name = "driller", version, about = "HTTP load testing application written in Rust inspired by Ansible syntax")]
+#[command(name = "driller", version = SHORT_VERSION, long_version = LONG_VERSION, about = "HTTP load testing application written in Rust inspired by Ansible syntax")]
 struct Cli {
   #[command(subcommand)]
   command: Option<Commands>,
