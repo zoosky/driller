@@ -111,7 +111,7 @@ your own setup if `--worker-threads` matters to you.
 ### Examples (continued)
 
 ```bash
-# Default current-thread runtime (matches behavior before 0.10.3)
+# Default current-thread runtime (matches behavior before 0.10.2)
 driller run http://localhost:3000/api -p 64 -i 1000 --stats
 
 # Try multi-thread with 4 workers for a large-body workload
