@@ -1,6 +1,6 @@
 [package]
 name = "driller"
-version = "0.10.1"
+version = "0.10.2"
 authors = ["Ferran Basora <fcsonline@gmail.com>", "Andreas Kapp <zoosky@gmail.com>"]
 description = "A clean HTTP load-test drill. Ansible-style YAML plans, Rust runtime, RPS and percentiles per run -- no fancy bits."
 repository = "https://github.com/zoosky/driller"
@@ -26,7 +26,7 @@ serde_json = "1.0.39"
 serde_yaml = "0.9"
 url = "2.1.1"
 linked-hash-map = "0.5.3"
-tokio = { version = "1.43.1", features = ["time", "net"] }
+tokio = { version = "1.43.1", features = ["time", "net", "rt", "rt-multi-thread"] }
 reqwest = { version = "0.13", features = ["cookies", "hickory-dns"] }
 async-trait = "0.1.30"
 futures = "0.3.5"
@@ -38,3 +38,12 @@ hex = "0.4.3"
 
 [dev-dependencies]
 tempfile = "3.8"
+
+# Release-equivalent build that keeps debug symbols so samply / dtrace / instruments
+# can walk stacks. Use with `cargo build --profile profiling` or
+# `cargo install --path . --profile profiling --force`. Does not affect the
+# default `release` profile shipped to users.
+[profile.profiling]
+inherits = "release"
+debug = true
+strip = false

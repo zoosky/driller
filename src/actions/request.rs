@@ -190,21 +190,19 @@ impl Request {
       _ => panic!("Unknown method '{}'", self.method),
     };
 
-    // Resolve the body
-    let (client, request) = {
+    // Clone Client out of the Pool lock so RequestBuilder construction does not run under the Mutex.
+    let client = {
       let mut pool2 = pool.lock().unwrap();
-      let client = pool2.entry(domain).or_insert_with(|| ClientBuilder::default().danger_accept_invalid_certs(config.no_check_certificate).build().unwrap());
+      pool2.entry(domain).or_insert_with(|| ClientBuilder::default().danger_accept_invalid_certs(config.no_check_certificate).build().unwrap()).clone()
+    };
 
-      let request = match self.body.as_ref() {
-        Some(Body::Template(template_body)) => {
-          interpolated_body = uninterpolator.get_or_insert(interpolator::Interpolator::new(context)).resolve(template_body, !config.relaxed_interpolations);
-          client.request(method, interpolated_base_url.as_str()).body(interpolated_body)
-        }
-        Some(Body::Binary(binary_body)) => client.request(method, interpolated_base_url.as_str()).body(binary_body.clone()),
-        None => client.request(method, interpolated_base_url.as_str()),
-      };
-
-      (client.clone(), request)
+    let request = match self.body.as_ref() {
+      Some(Body::Template(template_body)) => {
+        interpolated_body = uninterpolator.get_or_insert(interpolator::Interpolator::new(context)).resolve(template_body, !config.relaxed_interpolations);
+        client.request(method, interpolated_base_url.as_str()).body(interpolated_body)
+      }
+      Some(Body::Binary(binary_body)) => client.request(method, interpolated_base_url.as_str()).body(binary_body.clone()),
+      None => client.request(method, interpolated_base_url.as_str()),
     };
 
     // Headers

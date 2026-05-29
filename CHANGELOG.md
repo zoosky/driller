@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-05-29
+
+### Changed
+- `actions::request`: shrink the connection-pool `Mutex` window to cover only the `HashMap` lookup and a cheap `reqwest::Client` clone (the inner state is `Arc`-shared). The per-request `RequestBuilder` is now constructed after the lock is released. Originally pursued as a candidate fix for a multi-thread-runtime throughput regression at moderate response sizes; a clean-machine sweep of the patched binary did not show the regression closing, so this lands as a cleanup rather than a perf fix.
+- `Cargo.toml`: declare tokio's `rt` and `rt-multi-thread` features explicitly. The runtime builder requires both, and they were previously available only via reqwest's transitive feature enablement.
+
+### Added
+- `Cargo.toml`: a `profiling` cargo profile that inherits from `release` and keeps debug symbols (`debug = true, strip = false`). Use with `cargo build --profile profiling` or `cargo install --path . --profile profiling --force` for samply / instruments stack walking. Default `release` build is unchanged.
+
 ## [0.10.1] - 2026-05-28
 
 ### Fixed
