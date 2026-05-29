@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.10.3] - 2026-05-29
+## [0.10.2] - 2026-05-29
 
 ### Added
 - `driller run --worker-threads N` (short `-w N`): selects the tokio runtime. `N = 1` (default) uses the current-thread runtime; `N >= 2` uses the multi-thread runtime with `N` worker threads. `N = 0` is rejected at CLI parse time. See `docs/cli-reference.md` for the workload-vs-N guidance table.
@@ -98,7 +98,9 @@ See [FORK.md](./FORK.md) for rationale and migration instructions.
 - Benchmark YAML format and CLI flags are fully compatible with drill 0.9.0
 - Full upstream git history preserved
 
-[Unreleased]: https://github.com/zoosky/driller/compare/0.10.0...HEAD
+[Unreleased]: https://github.com/zoosky/driller/compare/0.10.2...HEAD
+[0.10.2]: https://github.com/zoosky/driller/compare/0.10.1...0.10.2
+[0.10.1]: https://github.com/zoosky/driller/compare/0.10.0...0.10.1
 [0.10.0]: https://github.com/zoosky/driller/compare/0.10.0-alpha.2...0.10.0
 [0.10.0-alpha.2]: https://github.com/zoosky/driller/compare/0.10.0-alpha.1...0.10.0-alpha.2
 [0.10.0-alpha.1]: https://github.com/zoosky/driller/releases/tag/0.10.0-alpha.1
