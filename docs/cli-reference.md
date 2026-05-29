@@ -76,6 +76,48 @@ layers (last wins):
 2. **Benchmark YAML** -- values from the file override defaults
 3. **CLI flags** -- `--concurrency`, `--iterations`, etc. override the file
 
+## Tokio runtime selection
+
+`--worker-threads N` (alias `-w N`) selects which tokio runtime drives the
+benchmark:
+
+| `--worker-threads` | Runtime built                                 |
+|--------------------|------------------------------------------------|
+| omitted or `1`     | current-thread runtime (single OS thread)      |
+| `N >= 2`           | multi-thread runtime with `N` worker threads   |
+| `0` or invalid     | rejected at CLI parse time                     |
+
+The default (current-thread) has the lowest per-request overhead and the most
+predictable performance across workload sizes. The multi-thread runtime can
+win significantly on some workloads but loses significantly on others. There
+is no single `N` that dominates across payload sizes; tune to your workload
+and measure.
+
+Rough guidance from internal measurements on a 28-core macOS host hitting a
+local target server with `-p 256` over a 10 s window:
+
+| Response body size | Best `N`    | Multi-thread Δ vs current-thread (best `N`) |
+|--------------------|-------------|----------------------------------------------|
+| Small (~3 B - 8 KB)   | 2        | +55 % to +65 %                               |
+| Medium (~64 KB)       | 1 (or 2) | -2 % to -9 % (multi-thread cannot beat ct)   |
+| Large (~512 KB - 2 MB) | 16 - 28 | +17 % to +39 %                              |
+| Very large (~10 MB)   | (insensitive) | -4 % to -6 %                            |
+| Latency-bound (slow server) | 2  | +5 % to +11 %                                |
+
+These numbers are illustrative, not portable -- the exact crossover points
+depend on host CPU topology, network stack, and target behavior. Measure on
+your own setup if `--worker-threads` matters to you.
+
+### Examples (continued)
+
+```bash
+# Default current-thread runtime (matches behavior before 0.10.3)
+driller run http://localhost:3000/api -p 64 -i 1000 --stats
+
+# Try multi-thread with 4 workers for a large-body workload
+driller run http://localhost:3000/large-payload -p 256 -d 30s -w 4 --stats
+```
+
 ## Legacy invocation
 
 The original `driller --benchmark <FILE>` form continues to work. It is
