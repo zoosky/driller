@@ -134,22 +134,22 @@ struct RunArgs {
   #[arg(short = 'e', long)]
   rampup: Option<usize>,
 
-  /// Worker threads for the multi-thread tokio runtime.
+  /// Worker threads for the HTTP I/O runtime.
   ///
-  /// 1 (default) selects the current-thread runtime -- single OS thread, no
-  /// cross-worker coordination, lowest per-request overhead. N >= 2 selects
-  /// the multi-thread runtime with N worker threads. Optimal N depends on
-  /// payload size and target; see the user guide for the workload-vs-N table.
+  /// 1 (default) drives socket I/O on a single OS thread -- no cross-worker
+  /// coordination, lowest per-request overhead. N >= 2 spreads socket I/O
+  /// across N worker threads. Optimal N depends on payload size and target;
+  /// see the user guide for the workload-vs-N table.
   #[arg(short = 'w', long, value_parser = parse_worker_threads)]
   worker_threads: Option<usize>,
 }
 
 /// Parses the `--worker-threads` value.
 ///
-/// Rejects 0 at clap parse time -- `worker_threads(0)` would panic inside
-/// tokio's runtime builder. Any positive integer is accepted; the runtime
-/// builder uses 1 to select the current-thread scheduler and >= 2 to select
-/// the multi-thread scheduler.
+/// Rejects 0 at clap parse time -- 0 worker threads would panic inside the
+/// I/O runtime builder. Any positive integer is accepted; the builder uses 1
+/// to select a single-threaded I/O scheduler and >= 2 to select a
+/// multi-threaded I/O scheduler with that many worker threads.
 fn parse_worker_threads(s: &str) -> Result<usize, String> {
   let n: usize = s.parse().map_err(|_| format!("'{s}' is not a positive integer"))?;
   if n == 0 {

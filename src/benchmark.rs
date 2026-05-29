@@ -5,8 +5,8 @@ use std::time::{Duration, Instant};
 use futures::stream::{self, StreamExt};
 
 use serde_json::{Map, Value, json};
+use smol::Timer;
 use tokio::runtime;
-use tokio::time::sleep;
 
 use crate::actions::{self, Report, Runnable};
 use crate::config::Config;
@@ -53,7 +53,7 @@ pub struct BenchmarkResult {
 async fn run_iteration(benchmark: Arc<Benchmark>, pool: Pool, config: Arc<Config>, iteration: i64) -> Vec<Report> {
   if config.rampup > 0 {
     let delay = config.rampup / config.iterations;
-    sleep(Duration::new((delay * iteration) as u64, 0)).await;
+    Timer::after(Duration::new((delay * iteration) as u64, 0)).await;
   }
 
   let mut context: Context = Context::new();
@@ -101,7 +101,16 @@ pub fn execute(options: &RunOptions) -> BenchmarkResult {
   println!("{} {}", "Base URL".yellow(), config.base.cyan());
   println!();
 
-  // 1 (default) selects the current-thread runtime; N >= 2 selects multi-thread with N workers.
+  // Orchestration (task scheduling, batching, timers) is driven by smol via
+  // `smol::block_on` below. The HTTP client (reqwest) still requires a tokio
+  // reactor in thread-local context to drive its socket I/O, so we keep a tokio
+  // runtime alive on a dedicated background thread and enter its handle on the
+  // foreground thread for the duration of the run.
+  //
+  // The `-w/--worker-threads` flag still selects how the tokio I/O runtime is
+  // built: 1 (default) -> current-thread runtime (single OS thread driving the
+  // reactor); N >= 2 -> multi-thread runtime with N worker threads. This keeps
+  // the two runtime shapes distinct and measurable.
   let worker_threads = options.worker_threads.unwrap_or(1);
   let rt = if worker_threads <= 1 {
     runtime::Builder::new_current_thread().enable_all().build().unwrap()
@@ -109,7 +118,25 @@ pub fn execute(options: &RunOptions) -> BenchmarkResult {
     runtime::Builder::new_multi_thread().enable_all().worker_threads(worker_threads).build().unwrap()
   };
 
-  rt.block_on(async {
+  // Keep the tokio runtime running on its own thread so its reactor is actively
+  // pumped while smol drives the orchestration future. A current-thread runtime
+  // only services registered I/O while one of its `block_on` calls is parked on
+  // the driver, so we park it here on a future that never completes; the
+  // background thread is released when `rt` is dropped at the end of `execute`.
+  let handle = rt.handle().clone();
+  let _io_thread = std::thread::Builder::new()
+    .name("driller-io".to_string())
+    .spawn(move || {
+      rt.block_on(std::future::pending::<()>());
+    })
+    .expect("failed to spawn tokio I/O thread");
+
+  // Entering the handle installs the tokio reactor/timer into thread-local
+  // context, so reqwest futures polled by smol on this thread register their
+  // sockets with the tokio reactor running on `driller-io`.
+  let _enter = handle.enter();
+
+  smol::block_on(async {
     let mut benchmark: Benchmark = Benchmark::new();
     let pool_store: PoolStore = PoolStore::new();
 
@@ -149,9 +176,18 @@ pub fn execute(options: &RunOptions) -> BenchmarkResult {
         iteration += batch_size;
 
         let buffered = stream::iter(children).buffer_unordered(config.concurrency as usize);
-        match tokio::time::timeout(remaining, buffered.collect::<Vec<_>>()).await {
-          Ok(batch_reports) => all_reports.extend(batch_reports),
-          Err(_) => break,
+
+        // smol-based timeout: race the batch against a smol timer. If the timer
+        // wins we are out of budget for this run, so break the loop (matching
+        // the previous `Err(_) => break` behaviour on tokio timeout elapse).
+        let batch = async { Some(buffered.collect::<Vec<_>>().await) };
+        let deadline = async {
+          Timer::after(remaining).await;
+          None
+        };
+        match smol::future::or(batch, deadline).await {
+          Some(batch_reports) => all_reports.extend(batch_reports),
+          None => break,
         }
       }
 
