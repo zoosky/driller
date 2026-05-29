@@ -35,6 +35,7 @@ pub struct RunOptions {
   pub iterations: Option<usize>,
   pub duration: Option<Duration>,
   pub rampup: Option<usize>,
+  pub worker_threads: Option<usize>,
   pub relaxed_interpolations: bool,
   pub no_check_certificate: bool,
   pub quiet: bool,
@@ -100,12 +101,12 @@ pub fn execute(options: &RunOptions) -> BenchmarkResult {
   println!("{} {}", "Base URL".yellow(), config.base.cyan());
   println!();
 
-  let threads = std::cmp::min(num_cpus::get(), config.concurrency as usize).max(1);
-  let multi_thread = matches!(std::env::var("DRILLER_RUNTIME").as_deref(), Ok("multi_thread"));
-  let rt = if multi_thread {
-    runtime::Builder::new_multi_thread().enable_all().worker_threads(threads).build().unwrap()
-  } else {
+  // 1 (default) selects the current-thread runtime; N >= 2 selects multi-thread with N workers.
+  let worker_threads = options.worker_threads.unwrap_or(1);
+  let rt = if worker_threads <= 1 {
     runtime::Builder::new_current_thread().enable_all().build().unwrap()
+  } else {
+    runtime::Builder::new_multi_thread().enable_all().worker_threads(worker_threads).build().unwrap()
   };
 
   rt.block_on(async {

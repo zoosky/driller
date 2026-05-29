@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.10.2] - 2026-05-29
+## [0.10.3] - 2026-05-29
+
+### Added
+- `driller run --worker-threads N` (short `-w N`): selects the tokio runtime. `N = 1` (default) uses the current-thread runtime; `N >= 2` uses the multi-thread runtime with `N` worker threads. `N = 0` is rejected at CLI parse time. See `docs/cli-reference.md` for the workload-vs-N guidance table.
+
+### Changed
+- Default tokio runtime is now explicitly `current_thread`. This matches the behavior every previous release shipped with -- the prior derivation `min(num_cpus, concurrency)` was paired with `Builder::new_current_thread()`, which silently ignored the computed worker count. Behavior is therefore identical for users who do not pass `--worker-threads`; only the manifest is now honest.
+
+### Removed
+- `num_cpus` dependency. No longer needed now that the worker count is taken directly from the CLI flag.
 
 ### Changed
 - `actions::request`: shrink the connection-pool `Mutex` window to cover only the `HashMap` lookup and a cheap `reqwest::Client` clone (the inner state is `Arc`-shared). The per-request `RequestBuilder` is now constructed after the lock is released. Originally pursued as a candidate fix for a multi-thread-runtime throughput regression at moderate response sizes; a clean-machine sweep of the patched binary did not show the regression closing, so this lands as a cleanup rather than a perf fix.

@@ -133,6 +133,29 @@ struct RunArgs {
   /// Ramp-up time in seconds
   #[arg(short = 'e', long)]
   rampup: Option<usize>,
+
+  /// Worker threads for the multi-thread tokio runtime.
+  ///
+  /// 1 (default) selects the current-thread runtime -- single OS thread, no
+  /// cross-worker coordination, lowest per-request overhead. N >= 2 selects
+  /// the multi-thread runtime with N worker threads. Optimal N depends on
+  /// payload size and target; see the user guide for the workload-vs-N table.
+  #[arg(short = 'w', long, value_parser = parse_worker_threads)]
+  worker_threads: Option<usize>,
+}
+
+/// Parses the `--worker-threads` value.
+///
+/// Rejects 0 at clap parse time -- `worker_threads(0)` would panic inside
+/// tokio's runtime builder. Any positive integer is accepted; the runtime
+/// builder uses 1 to select the current-thread scheduler and >= 2 to select
+/// the multi-thread scheduler.
+fn parse_worker_threads(s: &str) -> Result<usize, String> {
+  let n: usize = s.parse().map_err(|_| format!("'{s}' is not a positive integer"))?;
+  if n == 0 {
+    return Err("--worker-threads must be at least 1".to_string());
+  }
+  Ok(n)
 }
 
 /// Parses the `--threshold` value as milliseconds.
@@ -237,6 +260,7 @@ fn main() {
         iterations: run_args.iterations,
         duration: run_args.duration.as_deref().map(parse_duration),
         rampup: run_args.rampup,
+        worker_threads: run_args.worker_threads,
         relaxed_interpolations: cli.relaxed_interpolations,
         no_check_certificate: cli.no_check_certificate,
         quiet: cli.quiet,
@@ -261,6 +285,7 @@ fn main() {
         iterations: None,
         duration: None,
         rampup: None,
+        worker_threads: None,
         relaxed_interpolations: cli.relaxed_interpolations,
         no_check_certificate: cli.no_check_certificate,
         quiet: cli.quiet,

@@ -164,6 +164,7 @@ mod tests {
       iterations: None,
       duration: None,
       rampup: None,
+      worker_threads: None,
       relaxed_interpolations: false,
       no_check_certificate: false,
       quiet: false,
