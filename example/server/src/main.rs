@@ -1,10 +1,9 @@
 //! Local HTTP fixture server for the driller `example/` plans.
 //!
-//! A small [axum](https://github.com/tokio-rs/axum) reimplementation of the
-//! former Node/Express `server.js`. It serves the same routes and the same
-//! static fixtures under `responses/`, so every `example/*.yml` plan runs
-//! against it unchanged -- which lets CI exercise the examples without a Node
-//! toolchain.
+//! A small [axum](https://github.com/tokio-rs/axum) server. It serves the
+//! static fixtures under `responses/` plus a few dynamic endpoints, so every
+//! `example/*.yml` plan runs against it -- which lets CI exercise the examples
+//! with only cargo.
 //!
 //! Routes (parity with the old `server.js`):
 //! - `GET /` -> `{"status":":D"}`
@@ -134,15 +133,14 @@ async fn random_users(State(state): State<AppState>) -> Response {
   }
 }
 
-/// `POST /api/transactions` -- echo success when `a + b == "123"`.
-///
-/// Reproduces the old server's JavaScript `body.a + body.b === '123'`: numeric
-/// operands are added, otherwise the operands are string-concatenated.
+/// `POST /api/transactions` -- echo success when the body's `a + b` equals
+/// `"123"`. See [`add_or_concat`] for the combine rule, which matches the
+/// example's `transactions.csv` data.
 async fn transactions(body: Bytes) -> Response {
   let parsed: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
   let a = parsed.get("a").unwrap_or(&Value::Null);
   let b = parsed.get("b").unwrap_or(&Value::Null);
-  if js_plus(a, b) == "123" {
+  if add_or_concat(a, b) == "123" {
     json(StatusCode::OK, r#"{"status":":D"}"#)
   } else {
     json(StatusCode::INTERNAL_SERVER_ERROR, r#"{"status":":/"}"#)
@@ -150,8 +148,7 @@ async fn transactions(body: Bytes) -> Response {
 }
 
 /// Fallback handler: serve `responses/<request-path>` as a static file,
-/// returning 404 when the file is absent. Honors the configured delay, like
-/// the old server's `logger_handler`.
+/// returning 404 when the file is absent. Honors the configured delay.
 async fn static_file(State(state): State<AppState>, uri: Uri) -> Response {
   if !state.delay.is_zero() {
     tokio::time::sleep(state.delay).await;
@@ -197,9 +194,10 @@ fn cookie_sid(headers: &HeaderMap) -> Option<String> {
   cookies.split(';').map(str::trim).find_map(|pair| pair.strip_prefix("sid=").map(|v| v.trim_matches('"').to_owned()))
 }
 
-/// Render `a + b` the way JavaScript's `+` operator would for the value types
-/// the example uses: add when both are numbers, otherwise string-concatenate.
-fn js_plus(a: &Value, b: &Value) -> String {
+/// Combine `a` and `b` for the `/api/transactions` check: add them when both
+/// are numbers, otherwise concatenate their string forms. Matches the example's
+/// `transactions.csv` data (e.g. `"12"` + `3` -> `"123"`).
+fn add_or_concat(a: &Value, b: &Value) -> String {
   if a.is_number() && b.is_number() {
     let sum = a.as_f64().unwrap_or(0.0) + b.as_f64().unwrap_or(0.0);
     if sum.fract() == 0.0 {
@@ -208,12 +206,13 @@ fn js_plus(a: &Value, b: &Value) -> String {
       format!("{sum}")
     }
   } else {
-    format!("{}{}", js_str(a), js_str(b))
+    format!("{}{}", value_to_string(a), value_to_string(b))
   }
 }
 
-/// Render a single JSON value as JavaScript's `String()` would.
-fn js_str(value: &Value) -> String {
+/// Render a single JSON value as a plain string: string content verbatim,
+/// numbers and bools via their display form, null as `"null"`.
+fn value_to_string(value: &Value) -> String {
   match value {
     Value::String(s) => s.clone(),
     Value::Null => "null".to_string(),

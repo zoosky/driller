@@ -19,10 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--verbose` each plan step also prints a compact per-step breakdown.
 
 ### Changed
-- Example server rewritten in Rust (axum) at `example/server` -- same routes and
-  `responses/` fixtures as the former Node/Express server, with no Node
-  toolchain required. The Node server is retained as a fallback for now. Docker
-  files for the example server were dropped.
+- Example server is now a small Rust (axum) binary at `example/server`, serving
+  the `responses/` fixtures and a few dynamic endpoints; running the examples
+  needs only `cargo`. The previous Node/Express example server, its `npm`
+  dependency tree, and its Docker files were removed.
 - CI: a new `examples` job builds the example server and runs every standalone
   `example/*.yml` plan against it, gating on a clean exit and no connection
   errors -- turning the example suite into a regression test.
@@ -33,12 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `example/headers.yml`: corrected the base URL port (`3000` -> `9000`) so the custom-headers example reaches the example server instead of failing with connection-refused.
 - `example/benchmark.yml`: fixed the CSV `quote_char` (`"\'"` -> `"'"`, which had decoded to a backslash) so the CSV-driven POST step issues requests instead of silently parsing nothing; corrected the matching `quote_char` example in `SYNTAX.md`.
 
-### Security
-- `example/server`: `npm audit fix` clears 1 high (`path-to-regexp` ReDoS) and 3 moderate (`qs`) advisories in the example target server's transitive dependencies. The example server is a test fixture only; this does not affect the `driller` crate or binary.
-
 ### Documentation
 - `README.md`: document the `--worker-threads` / `-w` flag and link `docs/cli-reference.md` for the full flag list and the runtime workload-tuning guide.
-- `example/README.md`: use the `driller run --benchmark … --stats` form, add the missing `npm install` step, and close an unterminated code block.
+- `example/README.md`: document running the examples against the Rust server with `driller run --benchmark … --stats`.
 
 ## [0.10.2] - 2026-05-29
 
