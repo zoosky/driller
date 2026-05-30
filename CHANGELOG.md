@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `--stats` output now includes a per-status-code breakdown (each HTTP status
+  mapped to its request count) plus a `2xx/3xx/4xx/5xx` rollup. The synthetic
+  status `520` is labelled as a connection error, so dropped connections are
+  distinguishable from server `5xx` responses (e.g. `example/benchmark.yml` now
+  shows its 202 "failures" as 200 expected 404s + 2 flaky 500s).
+
 ### Changed
 - Example server rewritten in Rust (axum) at `example/server` -- same routes and
   `responses/` fixtures as the former Node/Express server, with no Node

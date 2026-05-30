@@ -14,6 +14,7 @@ use clap::{Args, Parser, Subcommand};
 use colored::*;
 use hdrhistogram::Histogram;
 use linked_hash_map::LinkedHashMap;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::process;
 use std::time::Duration;
@@ -312,6 +313,9 @@ struct DrillStats {
   total_requests: usize,
   successful_requests: usize,
   failed_requests: usize,
+  /// Count of requests per exact HTTP status code, sorted ascending. The
+  /// synthetic status 520 represents a connection error (see actions::request).
+  status_counts: BTreeMap<u16, usize>,
   hist: Histogram<u64>,
 }
 
@@ -347,6 +351,12 @@ fn compute_stats(sub_reports: &[Report]) -> DrillStats {
     }
   }
 
+  // Count of each exact status code (BTreeMap keeps them sorted for display).
+  let mut status_counts: BTreeMap<u16, usize> = BTreeMap::new();
+  for req in sub_reports {
+    *status_counts.entry(req.status).or_insert(0) += 1;
+  }
+
   let total_requests = sub_reports.len();
   let successful_requests = group_by_status.entry(2).or_insert_with(Vec::new).len();
   let failed_requests = total_requests - successful_requests;
@@ -355,8 +365,36 @@ fn compute_stats(sub_reports: &[Report]) -> DrillStats {
     total_requests,
     successful_requests,
     failed_requests,
+    status_counts,
     hist,
   }
+}
+
+/// Prints the per-status-code breakdown and a class rollup (2xx/3xx/4xx/5xx)
+/// for a stats bucket, under the same `--stats` gate as the rest of the
+/// summary. The synthetic status 520 is labelled as a connection error so it
+/// is not mistaken for a server 5xx response.
+fn show_status_codes(stats: &DrillStats) {
+  if stats.status_counts.is_empty() {
+    return;
+  }
+
+  println!("{}", "Status codes".yellow());
+  for (code, count) in &stats.status_counts {
+    let label = if *code == 520 {
+      format!("{code} (connection error)")
+    } else {
+      code.to_string()
+    };
+    println!("  {:width$} {}", label.cyan(), count.to_string().cyan(), width = 23);
+  }
+
+  let mut class_counts: BTreeMap<u16, usize> = BTreeMap::new();
+  for (code, count) in &stats.status_counts {
+    *class_counts.entry(code / 100).or_insert(0) += count;
+  }
+  let rollup = class_counts.iter().map(|(class, count)| format!("{class}xx {count}")).collect::<Vec<_>>().join(" · ");
+  println!("  {}", rollup.dimmed());
 }
 
 fn format_time(tdiff: f64, nanosec: bool) -> String {
@@ -403,6 +441,7 @@ fn show_stats(list_reports: &[Vec<Report>], stats_option: bool, nanosec: bool, d
   println!("{:width2$} {}", "Total requests".yellow(), global_stats.total_requests.to_string().cyan(), width2 = 25);
   println!("{:width2$} {}", "Successful requests".yellow(), global_stats.successful_requests.to_string().cyan(), width2 = 25);
   println!("{:width2$} {}", "Failed requests".yellow(), global_stats.failed_requests.to_string().cyan(), width2 = 25);
+  show_status_codes(&global_stats);
   println!("{:width2$} {} {}", "Requests per second".yellow(), format!("{requests_per_second:.2}").cyan(), "[#/sec]".cyan(), width2 = 25);
   println!("{:width2$} {}", "Median time per request".yellow(), format_time(global_stats.median_duration(), nanosec).cyan(), width2 = 25);
   println!("{:width2$} {}", "Average time per request".yellow(), format_time(global_stats.mean_duration(), nanosec).cyan(), width2 = 25);
@@ -474,6 +513,24 @@ mod tests {
     assert_eq!(stats.total_requests, 3);
     assert_eq!(stats.successful_requests, 1);
     assert_eq!(stats.failed_requests, 2);
+  }
+
+  #[test]
+  fn stats_records_status_breakdown() {
+    let reports = vec![
+      report("a", 10.0, 200),
+      report("b", 11.0, 200),
+      report("c", 12.0, 404),
+      report("d", 13.0, 500),
+      report("e", 14.0, 520), // connection error
+    ];
+    let stats = compute_stats(&reports);
+    assert_eq!(stats.status_counts.get(&200), Some(&2));
+    assert_eq!(stats.status_counts.get(&404), Some(&1));
+    assert_eq!(stats.status_counts.get(&500), Some(&1));
+    assert_eq!(stats.status_counts.get(&520), Some(&1));
+    // every request is accounted for exactly once
+    assert_eq!(stats.status_counts.values().sum::<usize>(), stats.total_requests);
   }
 
   #[test]
