@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 license = "GPL-3.0-only"
-description = "Local HTTP fixture server for the driller example plans. A small axum reimplementation of the former Node/Express server.js -- same routes, same responses/ fixtures, no Node toolchain."
+description = "Local HTTP fixture server for the driller example plans. A small axum binary serving the responses/ fixtures plus a few dynamic endpoints (sessions, a flaky POST), so the example plans can run in CI with only cargo."
 
 # Standalone crate: NOT part of the driller package's build. The driller
 # manifest has no [workspace] and excludes example/server/ from its published
