@@ -370,14 +370,16 @@ fn compute_stats(sub_reports: &[Report]) -> DrillStats {
   }
 }
 
-/// Prints the per-status-code breakdown for a stats bucket. The synthetic
-/// status 520 is labelled as a connection error so it is not mistaken for a
-/// server 5xx response.
+/// Prints the per-status-code breakdown for a stats bucket, followed by a
+/// class rollup that buckets codes by family (`2xx`/`3xx`/`4xx`/`5xx`) -- so a
+/// run returning a mix of e.g. 200/201/204 sums them into a single `2xx`
+/// total. The synthetic status 520 is labelled as a connection error and kept
+/// out of the `5xx` bucket, reported as a separate `conn` total instead.
 ///
-/// With `name = None` (the global summary) it prints one indented `code count`
-/// line per distinct status. With `name = Some(step)` (a per-step summary,
-/// shown only under `--verbose`) it prints a single compact `code:count` line
-/// under the step's named columns to keep the per-step output tight.
+/// With `name = None` (the global summary) it prints the per-code lines plus
+/// the rollup. With `name = Some(step)` (a per-step summary, shown only under
+/// `--verbose`) it prints a single compact `code:count` line under the step's
+/// named columns to keep the per-step output tight.
 fn show_status_codes(stats: &DrillStats, name: Option<&str>) {
   if stats.status_counts.is_empty() {
     return;
@@ -398,6 +400,30 @@ fn show_status_codes(stats: &DrillStats, name: Option<&str>) {
     };
     println!("  {:width$} {}", label.cyan(), count.to_string().cyan(), width = 23);
   }
+
+  println!("  {}", status_class_rollup(&stats.status_counts).join(" · ").dimmed());
+}
+
+/// Builds the class-rollup parts for the status-code summary line: each HTTP
+/// family (`2xx`/`3xx`/`4xx`/`5xx`) summed across all its codes (so 200, 201,
+/// 204 fold into one `2xx` total), in ascending family order. The synthetic
+/// status 520 is kept out of the `5xx` bucket and appended as a separate `conn`
+/// total so dropped connections stay distinct from server errors.
+fn status_class_rollup(status_counts: &BTreeMap<u16, usize>) -> Vec<String> {
+  let mut class_counts: BTreeMap<u16, usize> = BTreeMap::new();
+  let mut connection_errors = 0;
+  for (code, count) in status_counts {
+    if *code == 520 {
+      connection_errors += count;
+    } else {
+      *class_counts.entry(code / 100).or_insert(0) += count;
+    }
+  }
+  let mut parts: Vec<String> = class_counts.iter().map(|(class, count)| format!("{class}xx {count}")).collect();
+  if connection_errors > 0 {
+    parts.push(format!("conn {connection_errors}"));
+  }
+  parts
 }
 
 fn format_time(tdiff: f64, nanosec: bool) -> String {
@@ -537,6 +563,13 @@ mod tests {
     assert_eq!(stats.status_counts.get(&520), Some(&1));
     // every request is accounted for exactly once
     assert_eq!(stats.status_counts.values().sum::<usize>(), stats.total_requests);
+  }
+
+  #[test]
+  fn class_rollup_buckets_codes_and_splits_connection_errors() {
+    let counts: BTreeMap<u16, usize> = [(200, 5), (201, 2), (204, 1), (404, 3), (500, 1), (520, 4)].into_iter().collect();
+    // 200+201+204 -> 2xx 8; 404 -> 4xx 3; 500 -> 5xx 1; 520 -> conn 4 (not 5xx).
+    assert_eq!(status_class_rollup(&counts), vec!["2xx 8", "4xx 3", "5xx 1", "conn 4"]);
   }
 
   #[test]
