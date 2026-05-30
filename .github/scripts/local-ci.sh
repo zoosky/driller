@@ -9,6 +9,7 @@
 #   - cargo clippy -- -D warnings          (Clippy workflow job)
 #   - cargo test                           (Test workflow job)
 #   - cargo audit                          (Security audit workflow job, if installed)
+#   - example plans vs the example server  (Examples workflow job)
 #   - cargo tarpaulin --out Xml --ignore-tests  (Code coverage workflow job; opt-in only)
 #
 # The release workflow is not mirrored — it only runs on tag pushes and
@@ -17,6 +18,7 @@
 # Override knobs:
 #   JOBS              cargo --jobs N for the parallel builds (default: half the cores)
 #   SKIP_AUDIT=1      skip `cargo audit` even if installed
+#   SKIP_EXAMPLES=1   skip building + running the example server / example plans
 #   RUN_COVERAGE=1    additionally run `cargo tarpaulin` (slow; opt-in)
 #   SKIP_HEARTBEAT=1  silence the 30s "still running" progress line
 #
@@ -145,15 +147,64 @@ run_coverage() {
   CARGO_TARGET_DIR=target-tarpaulin cargo tarpaulin --out Xml --ignore-tests --jobs "$JOBS"
 }
 
+# Mirror of the `examples` workflow job: build driller + the example server,
+# start the server, and run every standalone example plan against it. Gates on
+# a clean exit AND no connection errors (the latter catches a wrong-port /
+# server-down regression that a bare exit code misses). Runs in its own
+# CARGO_TARGET_DIR so it does not serialise on the clippy/test target locks.
+run_examples() {
+  if [ "${SKIP_EXAMPLES:-0}" = "1" ]; then
+    echo "SKIP_EXAMPLES=1 — skipping example plans"
+    return 0
+  fi
+  export ITERATIONS=2 EDITOR=users
+
+  CARGO_TARGET_DIR=target-examples cargo build --release --jobs "$JOBS"
+  cargo build --release --jobs "$JOBS" --manifest-path example/server/Cargo.toml
+
+  local driller="target-examples/release/driller"
+  local server="example/server/target/release/driller-example-server"
+
+  # Not `local`: the EXIT trap fires after this function returns, so the pid
+  # must still be in scope then. (Each worker is its own subshell, so this does
+  # not leak into the parent.) The `${server_pid:-}` guard keeps the trap safe
+  # under `set -u`.
+  server_pid=""
+  trap '[ -n "${server_pid:-}" ] && kill "$server_pid" 2>/dev/null; true' EXIT
+  "$server" --responses-dir example/server/responses >/dev/null 2>&1 &
+  server_pid=$!
+
+  local up=0 _
+  for _ in $(seq 1 50); do
+    if curl -sf http://127.0.0.1:9000/api/users.json >/dev/null 2>&1; then up=1; break; fi
+    sleep 0.2
+  done
+  if [ "$up" -ne 1 ]; then
+    echo "example server did not become ready on :9000"
+    return 1
+  fi
+
+  # Standalone plans only (top-level `plan:` key); comments/subcomments/subtags
+  # are include fragments exercised via their parents.
+  local rc=0 plan prc out
+  for plan in $(cd example && grep -lE '^plan:' *.yml); do
+    if out=$("$driller" run --benchmark "example/$plan" --stats 2>&1); then prc=0; else prc=$?; fi
+    if [ "$prc" -ne 0 ]; then echo "$plan exited $prc"; rc=1; fi
+    if printf '%s' "$out" | grep -q 'Error connecting'; then echo "$plan produced connection errors"; rc=1; fi
+  done
+  return "$rc"
+}
+
 # --- Phase 1: parallel CI mirror ---
 
 echo "=== Phase 1: parallel CI mirror ==="
 echo "    JOBS=$JOBS (cores=$CORES)"
 
-start "fmt"     run_fmt
-start "clippy"  run_clippy
-start "test"    run_test
-start "audit"   run_audit
+start "fmt"      run_fmt
+start "clippy"   run_clippy
+start "test"     run_test
+start "audit"    run_audit
+start "examples" run_examples
 
 if [ "${SKIP_HEARTBEAT:-0}" != "1" ]; then
   heartbeat &
