@@ -16,6 +16,12 @@ Compile driller:
 cargo build --release
 ```
 
+> Shortcut: with [mise](https://mise.jdx.dev), `cd server && mise run demo [plan]`
+> starts the server and runs `example/<plan>.yml --stats` in one step (default
+> plan: `benchmark`). `mise run serve` just starts the server.
+
+
+
 Start the example server in another terminal (listens on port 9000):
 
 ```
