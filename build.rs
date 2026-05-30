@@ -12,10 +12,25 @@
 use std::process::Command;
 
 fn main() {
-  // Short git commit hash. Falls back to "unknown" if the build is not
-  // happening inside a git working tree (e.g. crates.io publish unpacks
-  // a tarball without .git).
-  let git_hash = Command::new("git").args(["rev-parse", "--short", "HEAD"]).output().ok().and_then(|o| String::from_utf8(o.stdout).ok()).map_or_else(|| "unknown".to_string(), |s| s.trim().to_string());
+  // Short git commit hash. `git rev-parse` can fail to spawn (no git on
+  // PATH), exit non-zero (not a working tree, or "dubious ownership" in a
+  // CI checkout), or run but return nothing -- a release builder unpacking a
+  // tarball without `.git` (crates.io, some CI containers) hits these. In
+  // every one of those cases the raw output is empty, which must not be
+  // embedded verbatim (that is how a release binary printed `0.10.2 ()`).
+  // So: require a successful exit and non-empty output, otherwise fall back
+  // to GitHub Actions' `GITHUB_SHA` (short), and only then to "unknown".
+  let git_hash = Command::new("git")
+    .args(["rev-parse", "--short", "HEAD"])
+    .output()
+    .ok()
+    .filter(|o| o.status.success())
+    .and_then(|o| String::from_utf8(o.stdout).ok())
+    .map(|s| s.trim().to_string())
+    .filter(|s| !s.is_empty())
+    .or_else(|| std::env::var("GITHUB_SHA").ok().map(|s| s.chars().take(7).collect::<String>()))
+    .filter(|s| !s.is_empty())
+    .unwrap_or_else(|| "unknown".to_string());
 
   println!("cargo:rustc-env=GIT_HASH={git_hash}");
 

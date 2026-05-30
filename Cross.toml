@@ -1,0 +1,8 @@
+# Configuration for `cross` (used by the release workflow's musl target).
+#
+# `cross` runs the build inside a container, so `build.rs` cannot see the
+# host's environment unless it is explicitly passed through. Forward
+# GITHUB_SHA so the build-script git-hash fallback embeds the real commit in
+# `--version` even when `git` is unavailable inside the container.
+[build.env]
+passthrough = ["GITHUB_SHA"]

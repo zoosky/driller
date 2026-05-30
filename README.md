@@ -111,7 +111,11 @@ Run-specific options:
   -i, --iterations <N>           Number of iterations [default: 1]
   -d, --duration <DURATION>      Run for a fixed wall-clock duration (e.g. "30s", "5m", "1h")
   -e, --rampup <N>               Ramp-up time in seconds [default: 0]
+  -w, --worker-threads <N>       Tokio runtime workers: 1 = current-thread (default), N >= 2 = multi-thread [default: 1]
 ```
+
+For the complete flag list and the `--worker-threads` workload-tuning guide,
+see [docs/cli-reference.md](./docs/cli-reference.md).
 
 `--duration` and `--iterations` are mutually exclusive. When neither is given,
 the default is 1 iteration.

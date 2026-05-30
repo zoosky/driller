@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-05-30
+
+### Fixed
+- `--version` no longer prints an empty commit hash in release binaries (e.g. `driller 0.10.2 ()`). `build.rs` now requires a successful, non-empty `git rev-parse` and otherwise falls back to `$GITHUB_SHA` (then `unknown`), so CI-built binaries always embed a real commit identifier. A `Cross.toml` passes `GITHUB_SHA` into the musl container build for the same reason.
+- Release workflow: build the `x86_64-apple-darwin` target on `macos-latest` (Apple-silicon, cross-compiling) instead of the frequently-unavailable `macos-13` runner, which had left the Intel macOS asset missing from the 0.10.2 release.
+
+### Documentation
+- `README.md`: document the `--worker-threads` / `-w` flag and link `docs/cli-reference.md` for the full flag list and the runtime workload-tuning guide.
+
 ## [0.10.2] - 2026-05-29
 
 ### Added
@@ -98,7 +107,8 @@ See [FORK.md](./FORK.md) for rationale and migration instructions.
 - Benchmark YAML format and CLI flags are fully compatible with drill 0.9.0
 - Full upstream git history preserved
 
-[Unreleased]: https://github.com/zoosky/driller/compare/0.10.2...HEAD
+[Unreleased]: https://github.com/zoosky/driller/compare/0.10.3...HEAD
+[0.10.3]: https://github.com/zoosky/driller/compare/0.10.2...0.10.3
 [0.10.2]: https://github.com/zoosky/driller/compare/0.10.1...0.10.2
 [0.10.1]: https://github.com/zoosky/driller/compare/0.10.0...0.10.1
 [0.10.0]: https://github.com/zoosky/driller/compare/0.10.0-alpha.2...0.10.0
