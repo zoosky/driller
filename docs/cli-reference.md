@@ -70,10 +70,10 @@ form:
 ### Statistics output (`--stats`)
 
 `--stats` prints totals, latency percentiles, and a **status-code breakdown**:
-each distinct HTTP status mapped to its request count, followed by a
-`2xx/3xx/4xx/5xx` rollup. The synthetic status `520` denotes a connection
-error (driller could not reach the target), so it is shown distinctly from a
-server `5xx` response. For example:
+each distinct HTTP status mapped to its request count. The synthetic status
+`520` denotes a connection error (driller could not reach the target), so it is
+shown distinctly from a server `5xx` response. With `--verbose`, each plan step
+also prints its own compact breakdown. For example:
 
 ```
 Successful requests       2598
@@ -82,7 +82,6 @@ Status codes
   200                     2598
   404                     200
   500                     2
-  2xx 2598 · 4xx 200 · 5xx 2
 ```
 
 ## Configuration precedence

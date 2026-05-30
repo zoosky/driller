@@ -370,12 +370,12 @@ fn compute_stats(sub_reports: &[Report]) -> DrillStats {
   }
 }
 
-/// Prints the status-code breakdown for a stats bucket. The synthetic status
-/// 520 is labelled as a connection error so it is not mistaken for a server
-/// 5xx response.
+/// Prints the per-status-code breakdown for a stats bucket. The synthetic
+/// status 520 is labelled as a connection error so it is not mistaken for a
+/// server 5xx response.
 ///
-/// With `name = None` (the global summary) it prints a multi-line block plus a
-/// 2xx/3xx/4xx/5xx class rollup. With `name = Some(step)` (a per-step summary,
+/// With `name = None` (the global summary) it prints one indented `code count`
+/// line per distinct status. With `name = Some(step)` (a per-step summary,
 /// shown only under `--verbose`) it prints a single compact `code:count` line
 /// under the step's named columns to keep the per-step output tight.
 fn show_status_codes(stats: &DrillStats, name: Option<&str>) {
@@ -398,25 +398,6 @@ fn show_status_codes(stats: &DrillStats, name: Option<&str>) {
     };
     println!("  {:width$} {}", label.cyan(), count.to_string().cyan(), width = 23);
   }
-
-  // Roll up by class, but keep connection errors (520) out of the 5xx bucket so
-  // the summary line preserves the same dropped-connection / server-error
-  // distinction the per-code lines make. They are reported as a separate `conn`
-  // count instead.
-  let mut class_counts: BTreeMap<u16, usize> = BTreeMap::new();
-  let mut connection_errors = 0;
-  for (code, count) in &stats.status_counts {
-    if *code == 520 {
-      connection_errors += count;
-    } else {
-      *class_counts.entry(code / 100).or_insert(0) += count;
-    }
-  }
-  let mut parts: Vec<String> = class_counts.iter().map(|(class, count)| format!("{class}xx {count}")).collect();
-  if connection_errors > 0 {
-    parts.push(format!("conn {connection_errors}"));
-  }
-  println!("  {}", parts.join(" · ").dimmed());
 }
 
 fn format_time(tdiff: f64, nanosec: bool) -> String {
