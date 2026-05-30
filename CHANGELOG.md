@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Example server rewritten in Rust (axum) at `example/server` -- same routes and
+  `responses/` fixtures as the former Node/Express server, with no Node
+  toolchain required. The Node server is retained as a fallback for now. Docker
+  files for the example server were dropped.
+- CI: a new `examples` job builds the example server and runs every standalone
+  `example/*.yml` plan against it, gating on a clean exit and no connection
+  errors -- turning the example suite into a regression test.
+
 ## [0.10.3] - 2026-05-30
 
 ### Fixed

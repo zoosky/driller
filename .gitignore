@@ -15,6 +15,7 @@
 
 # Example server
 example/server/node_modules
+example/server/target
 
 # Editor temp files
 .vscode

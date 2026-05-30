@@ -60,3 +60,48 @@ jobs:
 
       - name: Run cargo-tarpaulin
         run: cargo tarpaulin --out Xml --ignore-tests
+
+  examples:
+    name: Examples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build driller
+        run: cargo build --release
+      - name: Build example server
+        run: cargo build --release --manifest-path example/server/Cargo.toml
+      - name: Run example plans against the example server
+        env:
+          ITERATIONS: "2"
+          EDITOR: users
+        run: |
+          set -uo pipefail
+          ./example/server/target/release/driller-example-server \
+            --responses-dir example/server/responses &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 50); do
+            curl -sf http://127.0.0.1:9000/api/users.json >/dev/null 2>&1 && break
+            sleep 0.2
+          done
+          driller=./target/release/driller
+          rc=0
+          # Run every standalone plan (those with a top-level `plan:` key);
+          # comments/subcomments/subtags are include fragments, exercised via
+          # their parents. Gate on a clean exit AND no connection errors -- the
+          # latter catches a wrong-port / server-down regression that a bare
+          # exit code misses (driller reports those as failed requests but
+          # still exits 0).
+          for plan in $(cd example && grep -lE '^plan:' *.yml); do
+            echo "::group::$plan"
+            out=$("$driller" run --benchmark "example/$plan" --stats 2>&1)
+            prc=$?
+            echo "$out"
+            echo "::endgroup::"
+            if [ "$prc" -ne 0 ]; then echo "::error::$plan exited $prc"; rc=1; fi
+            if echo "$out" | grep -q 'Error connecting'; then
+              echo "::error::$plan produced connection errors"; rc=1
+            fi
+          done
+          exit "$rc"
