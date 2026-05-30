@@ -31,7 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release workflow: build the `x86_64-apple-darwin` target on `macos-latest` (Apple-silicon, cross-compiling) instead of the frequently-unavailable `macos-13` runner, which had left the Intel macOS asset missing from the 0.10.2 release.
 - `example/headers.yml`: corrected the base URL port (`3000` -> `9000`) so the custom-headers example reaches the example server instead of failing with connection-refused.
 - `example/benchmark.yml`: fixed the CSV `quote_char` (`"\'"` -> `"'"`, which had decoded to a backslash) so the CSV-driven POST step issues requests instead of silently parsing nothing; corrected the matching `quote_char` example in `SYNTAX.md`.
-- `example/server/Dockerfile-example-server`: copy the lockfile and use `npm ci` for reproducible builds, and pin the base image to `node:22-bookworm-slim`.
 
 ### Security
 - `example/server`: `npm audit fix` clears 1 high (`path-to-regexp` ReDoS) and 3 moderate (`qs`) advisories in the example target server's transitive dependencies. The example server is a test fixture only; this does not affect the `driller` crate or binary.

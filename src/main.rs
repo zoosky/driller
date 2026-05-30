@@ -399,12 +399,24 @@ fn show_status_codes(stats: &DrillStats, name: Option<&str>) {
     println!("  {:width$} {}", label.cyan(), count.to_string().cyan(), width = 23);
   }
 
+  // Roll up by class, but keep connection errors (520) out of the 5xx bucket so
+  // the summary line preserves the same dropped-connection / server-error
+  // distinction the per-code lines make. They are reported as a separate `conn`
+  // count instead.
   let mut class_counts: BTreeMap<u16, usize> = BTreeMap::new();
+  let mut connection_errors = 0;
   for (code, count) in &stats.status_counts {
-    *class_counts.entry(code / 100).or_insert(0) += count;
+    if *code == 520 {
+      connection_errors += count;
+    } else {
+      *class_counts.entry(code / 100).or_insert(0) += count;
+    }
   }
-  let rollup = class_counts.iter().map(|(class, count)| format!("{class}xx {count}")).collect::<Vec<_>>().join(" · ");
-  println!("  {}", rollup.dimmed());
+  let mut parts: Vec<String> = class_counts.iter().map(|(class, count)| format!("{class}xx {count}")).collect();
+  if connection_errors > 0 {
+    parts.push(format!("conn {connection_errors}"));
+  }
+  println!("  {}", parts.join(" · ").dimmed());
 }
 
 fn format_time(tdiff: f64, nanosec: bool) -> String {

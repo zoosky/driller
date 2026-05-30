@@ -81,10 +81,17 @@ jobs:
             --responses-dir example/server/responses &
           server_pid=$!
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          up=0
           for _ in $(seq 1 50); do
-            curl -sf http://127.0.0.1:9000/api/users.json >/dev/null 2>&1 && break
+            # Stop waiting if the server process died (e.g. failed to bind).
+            kill -0 "$server_pid" 2>/dev/null || break
+            if curl -sf http://127.0.0.1:9000/api/users.json >/dev/null 2>&1; then up=1; break; fi
             sleep 0.2
           done
+          if [ "$up" -ne 1 ]; then
+            echo "::error::example server did not become ready on :9000 (failed to bind?)"
+            exit 1
+          fi
           driller=./target/release/driller
           rc=0
           # Run every standalone plan (those with a top-level `plan:` key);
