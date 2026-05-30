@@ -165,6 +165,17 @@ run_examples() {
   local driller="target-examples/release/driller"
   local server="example/server/target/release/driller-example-server"
 
+  # Fail fast if port 9000 is already taken: our server could not bind, the
+  # plans would silently hit whatever is already there, and the failure would
+  # surface as a confusing mid-plan error (e.g. a session mismatch) instead of
+  # a clear "port in use". This is the most common local snag -- a leftover
+  # server from an earlier run.
+  if curl -sf http://127.0.0.1:9000/api/users.json >/dev/null 2>&1; then
+    echo "port 9000 is already in use (a leftover example server?); stop it and retry:"
+    echo "  pkill -f driller-example-server"
+    return 1
+  fi
+
   # Not `local`: the EXIT trap fires after this function returns, so the pid
   # must still be in scope then. (Each worker is its own subshell, so this does
   # not leak into the parent.) The `${server_pid:-}` guard keeps the trap safe
@@ -176,9 +187,15 @@ run_examples() {
 
   local up=0 _
   for _ in $(seq 1 50); do
+    # If the server process died (e.g. failed to bind), stop waiting.
+    kill -0 "$server_pid" 2>/dev/null || break
     if curl -sf http://127.0.0.1:9000/api/users.json >/dev/null 2>&1; then up=1; break; fi
     sleep 0.2
   done
+  if ! kill -0 "$server_pid" 2>/dev/null; then
+    echo "example server process exited before becoming ready (failed to bind :9000?)"
+    return 1
+  fi
   if [ "$up" -ne 1 ]; then
     echo "example server did not become ready on :9000"
     return 1
