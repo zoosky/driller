@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-05-30
+
+### Added
+- `--stats` output now includes a per-status-code breakdown: each HTTP status
+  mapped to its request count, followed by a `2xx/3xx/4xx/5xx` class rollup. The
+  synthetic status `520` is labelled as a connection error and reported as a
+  separate `conn` total (not folded into `5xx`), so dropped connections are
+  distinguishable from server `5xx` responses (e.g. `example/benchmark.yml` now
+  shows its 202 "failures" as 200 expected 404s + 2 flaky 500s). With
+  `--verbose` each plan step also prints a compact per-step breakdown.
+
+### Changed
+- Example server rewritten in Rust (axum) at `example/server` -- same routes and
+  `responses/` fixtures as the former Node/Express server, with no Node
+  toolchain required. The Node server is retained as a fallback for now. Docker
+  files for the example server were dropped.
+- CI: a new `examples` job builds the example server and runs every standalone
+  `example/*.yml` plan against it, gating on a clean exit and no connection
+  errors -- turning the example suite into a regression test.
+
+### Fixed
+- `--version` no longer prints an empty commit hash in release binaries (e.g. `driller 0.10.2 ()`). `build.rs` now requires a successful, non-empty `git rev-parse` and otherwise falls back to `$GITHUB_SHA` (then `unknown`), so CI-built binaries always embed a real commit identifier. A `Cross.toml` passes `GITHUB_SHA` into the musl container build for the same reason.
+- Release workflow: build the `x86_64-apple-darwin` target on `macos-latest` (Apple-silicon, cross-compiling) instead of the frequently-unavailable `macos-13` runner, which had left the Intel macOS asset missing from the 0.10.2 release.
+- `example/headers.yml`: corrected the base URL port (`3000` -> `9000`) so the custom-headers example reaches the example server instead of failing with connection-refused.
+- `example/benchmark.yml`: fixed the CSV `quote_char` (`"\'"` -> `"'"`, which had decoded to a backslash) so the CSV-driven POST step issues requests instead of silently parsing nothing; corrected the matching `quote_char` example in `SYNTAX.md`.
+
+### Security
+- `example/server`: `npm audit fix` clears 1 high (`path-to-regexp` ReDoS) and 3 moderate (`qs`) advisories in the example target server's transitive dependencies. The example server is a test fixture only; this does not affect the `driller` crate or binary.
+
+### Documentation
+- `README.md`: document the `--worker-threads` / `-w` flag and link `docs/cli-reference.md` for the full flag list and the runtime workload-tuning guide.
+- `example/README.md`: use the `driller run --benchmark … --stats` form, add the missing `npm install` step, and close an unterminated code block.
+
 ## [0.10.2] - 2026-05-29
 
 ### Added
@@ -98,7 +131,8 @@ See [FORK.md](./FORK.md) for rationale and migration instructions.
 - Benchmark YAML format and CLI flags are fully compatible with drill 0.9.0
 - Full upstream git history preserved
 
-[Unreleased]: https://github.com/zoosky/driller/compare/0.10.2...HEAD
+[Unreleased]: https://github.com/zoosky/driller/compare/0.10.3...HEAD
+[0.10.3]: https://github.com/zoosky/driller/compare/0.10.2...0.10.3
 [0.10.2]: https://github.com/zoosky/driller/compare/0.10.1...0.10.2
 [0.10.1]: https://github.com/zoosky/driller/compare/0.10.0...0.10.1
 [0.10.0]: https://github.com/zoosky/driller/compare/0.10.0-alpha.2...0.10.0

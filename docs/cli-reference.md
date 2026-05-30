@@ -67,6 +67,26 @@ form:
 | `--nanosec` | `-n` | Shows statistics in nanoseconds |
 | `--verbose` | `-v` | Toggle verbose output |
 
+### Statistics output (`--stats`)
+
+`--stats` prints totals, latency percentiles, and a **status-code breakdown**:
+each distinct HTTP status mapped to its request count, followed by a class
+rollup that sums each family (`2xx`/`3xx`/`4xx`/`5xx`). The synthetic status
+`520` denotes a connection error (driller could not reach the target); it is
+labelled as such and reported as a separate `conn` total rather than folded
+into `5xx`. With `--verbose`, each plan step also prints its own compact
+breakdown. For example:
+
+```
+Successful requests       2598
+Failed requests           202
+Status codes
+  200                     2598
+  404                     200
+  500                     2
+  2xx 2598 · 4xx 200 · 5xx 2
+```
+
 ## Configuration precedence
 
 When using `driller run` with a benchmark file, values are resolved in three

@@ -1,0 +1,24 @@
+[package]
+name = "driller-example-server"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "GPL-3.0-only"
+description = "Local HTTP fixture server for the driller example plans. A small axum reimplementation of the former Node/Express server.js -- same routes, same responses/ fixtures, no Node toolchain."
+
+# Standalone crate: NOT part of the driller package's build. The driller
+# manifest has no [workspace] and excludes example/server/ from its published
+# payload, so this nested crate is invisible to `cargo build`/`cargo publish`
+# of driller. Declaring an empty workspace here keeps it from being absorbed
+# into any parent workspace (mirrors driller-tools/server).
+[workspace]
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+clap = { version = "4", features = ["derive", "env"] }
+serde_json = "1"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

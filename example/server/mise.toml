@@ -1,0 +1,61 @@
+# mise tasks for the driller example fixture server.
+# Run from this directory (example/server). See https://mise.jdx.dev/tasks/
+#
+#   mise run serve              # just start the server on :9000
+#   mise run demo               # start the server + run example/benchmark.yml --stats
+#   mise run demo cookies       # ... run a specific plan (example/cookies.yml)
+#
+# `demo` prefers the repo-built ./../../target/release/driller; override with
+# DRILLER=/path/to/driller. env.yml needs ITERATIONS/EDITOR -- defaults are set.
+
+[tasks.serve]
+description = "Start the example fixture server on :9000 (Ctrl-C to stop)"
+dir = "{{config_root}}"
+run = "cargo run --release -- --responses-dir responses"
+
+[tasks.demo]
+description = "Start the example server and run an example plan against it (default: benchmark)"
+dir = "{{config_root}}"
+run = '''
+#!/usr/bin/env bash
+set -uo pipefail
+
+plan="${1:-benchmark}"
+plan_file="../${plan}.yml"
+if [ ! -f "$plan_file" ]; then
+  echo "no such plan: $plan_file" >&2
+  echo "available plans:" >&2
+  (cd .. && grep -lE '^plan:' *.yml | sed 's/\.yml$//;s/^/  /') >&2
+  exit 1
+fi
+
+# Prefer the repo-built binary; fall back to `driller` on PATH.
+driller="${DRILLER:-../../target/release/driller}"
+[ -x "$driller" ] || driller="$(command -v driller || true)"
+if [ -z "$driller" ]; then
+  echo "driller not found -- run 'cargo build --release' in the repo root, or set DRILLER" >&2
+  exit 1
+fi
+
+# Fail fast if something already holds :9000 (a leftover server).
+if curl -sf http://127.0.0.1:9000/api/users.json >/dev/null 2>&1; then
+  echo "port 9000 already in use; stop the other server: pkill -f driller-example-server" >&2
+  exit 1
+fi
+
+cargo run --release -- --responses-dir responses >/tmp/driller-example-server.log 2>&1 &
+server_pid=$!
+trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+for _ in $(seq 1 100); do
+  kill -0 "$server_pid" 2>/dev/null || { echo "server exited early; see /tmp/driller-example-server.log" >&2; exit 1; }
+  curl -sf http://127.0.0.1:9000/api/users.json >/dev/null 2>&1 && break
+  sleep 0.2
+done
+
+# env.yml interpolates these; harmless for the other plans.
+export ITERATIONS="${ITERATIONS:-3}" EDITOR="${EDITOR:-users}"
+
+echo "==> $driller run --benchmark $plan_file --stats"
+"$driller" run --benchmark "$plan_file" --stats
+'''
