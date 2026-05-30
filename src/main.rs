@@ -302,7 +302,7 @@ fn main() {
   let list_reports = benchmark_result.reports;
   let duration = benchmark_result.duration;
 
-  show_stats(&list_reports, cli.stats, cli.nanosec, duration);
+  show_stats(&list_reports, cli.stats, cli.nanosec, cli.verbose, duration);
 
   compare_benchmark(&list_reports, cli.compare.as_deref(), cli.threshold);
 
@@ -370,12 +370,22 @@ fn compute_stats(sub_reports: &[Report]) -> DrillStats {
   }
 }
 
-/// Prints the per-status-code breakdown and a class rollup (2xx/3xx/4xx/5xx)
-/// for a stats bucket, under the same `--stats` gate as the rest of the
-/// summary. The synthetic status 520 is labelled as a connection error so it
-/// is not mistaken for a server 5xx response.
-fn show_status_codes(stats: &DrillStats) {
+/// Prints the status-code breakdown for a stats bucket. The synthetic status
+/// 520 is labelled as a connection error so it is not mistaken for a server
+/// 5xx response.
+///
+/// With `name = None` (the global summary) it prints a multi-line block plus a
+/// 2xx/3xx/4xx/5xx class rollup. With `name = Some(step)` (a per-step summary,
+/// shown only under `--verbose`) it prints a single compact `code:count` line
+/// under the step's named columns to keep the per-step output tight.
+fn show_status_codes(stats: &DrillStats, name: Option<&str>) {
   if stats.status_counts.is_empty() {
+    return;
+  }
+
+  if let Some(name) = name {
+    let codes = stats.status_counts.iter().map(|(code, count)| format!("{code}:{count}")).collect::<Vec<_>>().join(" ");
+    println!("{:width$} {:width2$} {}", name.green(), "Status codes".yellow(), codes.cyan(), width = 25, width2 = 25);
     return;
   }
 
@@ -405,7 +415,7 @@ fn format_time(tdiff: f64, nanosec: bool) -> String {
   }
 }
 
-fn show_stats(list_reports: &[Vec<Report>], stats_option: bool, nanosec: bool, duration: f64) {
+fn show_stats(list_reports: &[Vec<Report>], stats_option: bool, nanosec: bool, verbose: bool, duration: f64) {
   if !stats_option {
     return;
   }
@@ -423,6 +433,9 @@ fn show_stats(list_reports: &[Vec<Report>], stats_option: bool, nanosec: bool, d
     println!("{:width$} {:width2$} {}", name.green(), "Total requests".yellow(), substats.total_requests.to_string().cyan(), width = 25, width2 = 25);
     println!("{:width$} {:width2$} {}", name.green(), "Successful requests".yellow(), substats.successful_requests.to_string().cyan(), width = 25, width2 = 25);
     println!("{:width$} {:width2$} {}", name.green(), "Failed requests".yellow(), substats.failed_requests.to_string().cyan(), width = 25, width2 = 25);
+    if verbose {
+      show_status_codes(&substats, Some(&name));
+    }
     println!("{:width$} {:width2$} {}", name.green(), "Median time per request".yellow(), format_time(substats.median_duration(), nanosec).cyan(), width = 25, width2 = 25);
     println!("{:width$} {:width2$} {}", name.green(), "Average time per request".yellow(), format_time(substats.mean_duration(), nanosec).cyan(), width = 25, width2 = 25);
     println!("{:width$} {:width2$} {}", name.green(), "Sample standard deviation".yellow(), format_time(substats.stdev_duration(), nanosec).cyan(), width = 25, width2 = 25);
@@ -441,7 +454,7 @@ fn show_stats(list_reports: &[Vec<Report>], stats_option: bool, nanosec: bool, d
   println!("{:width2$} {}", "Total requests".yellow(), global_stats.total_requests.to_string().cyan(), width2 = 25);
   println!("{:width2$} {}", "Successful requests".yellow(), global_stats.successful_requests.to_string().cyan(), width2 = 25);
   println!("{:width2$} {}", "Failed requests".yellow(), global_stats.failed_requests.to_string().cyan(), width2 = 25);
-  show_status_codes(&global_stats);
+  show_status_codes(&global_stats, None);
   println!("{:width2$} {} {}", "Requests per second".yellow(), format!("{requests_per_second:.2}").cyan(), "[#/sec]".cyan(), width2 = 25);
   println!("{:width2$} {}", "Median time per request".yellow(), format_time(global_stats.median_duration(), nanosec).cyan(), width2 = 25);
   println!("{:width2$} {}", "Average time per request".yellow(), format_time(global_stats.mean_duration(), nanosec).cyan(), width2 = 25);
