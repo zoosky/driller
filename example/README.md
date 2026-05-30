@@ -5,6 +5,11 @@ These examples run driller against a small local fixture server that serves the
 etc.). The server is a Rust [axum](https://github.com/tokio-rs/axum) binary --
 no Node toolchain required. The same example plans run against it in CI.
 
+> The example server (`server/`) ships with the git repository but **not** with
+> the published crate, so `cargo install driller` does not include it. To run
+> these examples, clone the repo:
+> `git clone https://github.com/zoosky/driller.git`.
+
 Compile driller:
 
 ```

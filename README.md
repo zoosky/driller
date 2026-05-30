@@ -66,6 +66,28 @@ driller run --benchmark benchmark.yml --stats
 
 For the full benchmark file syntax, see [SYNTAX.md](./SYNTAX.md).
 
+## Writing plans
+
+A plan is a YAML file with a `plan:` list of steps. The fastest way to learn the
+format is to read the runnable plans in [`example/`](./example), which build up
+features roughly in order of complexity:
+
+- `benchmark.yml` -- requests, `assign`, `assert`, `{{ }}` interpolation, and
+  CSV-driven requests
+- `cookies.yml` -- session/cookie propagation and chaining one request's
+  response into the next
+- `headers.yml` -- custom and templated request headers
+- `iterations.yml` / `throughput.yml` -- iteration counts and concurrency
+- `tags.yml` -- including sub-plans and selecting steps with `--tags`
+- `delay.yml`, `env.yml` -- pacing and environment-variable interpolation
+
+Each plan runs against the example server in [`example/server`](./example/server)
+(`cd example/server && cargo run --release`). The two references are
+[SYNTAX.md](./SYNTAX.md) for the plan format (every action, the
+`with_items`/CSV/`include` forms, and interpolation rules) and
+[docs/cli-reference.md](./docs/cli-reference.md) for CLI flags and the
+`--worker-threads` tuning guide.
+
 ## Features
 
 - **Ad-hoc URL testing** -- `driller run <URL>` sends requests without a
@@ -195,8 +217,11 @@ your platform:
 
 ## Testing locally
 
-The `example/` directory contains a small Node.js server and sample benchmark
-files. See the [example README](./example) for setup instructions.
+The `example/` directory contains a small Rust (axum) fixture server and sample
+benchmark plans. See the [example README](./example) for setup instructions. The
+server lives in the git repository; it is not part of the published crate, so
+install via a clone (`git clone https://github.com/zoosky/driller.git`) rather
+than `cargo install` if you want to run the examples.
 
 **Disclaimer:** do not run intensive benchmarks against production environments.
 
