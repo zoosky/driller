@@ -22,3 +22,4 @@ example/server/target
 
 # OS noise
 .DS_Store
+cobertura.xml
