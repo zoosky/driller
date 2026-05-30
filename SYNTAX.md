@@ -60,7 +60,7 @@ This item can be specified one of two ways.  First, as a simple string specifyin
 Second, it can be a hash with the following properties:
 
  - `file_name`: csv file containing the records to be used as items
- - `quote_char`: character to use as quote in csv parsing.  Defaults to `"\""`, but can be set to `"\'"`.  If your csv file has quoted strings that contain commas and that causes parse errors, make sure this value is set correctly.
+ - `quote_char`: character to use as quote in csv parsing.  Defaults to `"\""`, but can be set to `"'"`.  If your csv file has quoted strings that contain commas and that causes parse errors, make sure this value is set correctly.
 
 #### body item properties
 

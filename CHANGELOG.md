@@ -12,9 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - `--version` no longer prints an empty commit hash in release binaries (e.g. `driller 0.10.2 ()`). `build.rs` now requires a successful, non-empty `git rev-parse` and otherwise falls back to `$GITHUB_SHA` (then `unknown`), so CI-built binaries always embed a real commit identifier. A `Cross.toml` passes `GITHUB_SHA` into the musl container build for the same reason.
 - Release workflow: build the `x86_64-apple-darwin` target on `macos-latest` (Apple-silicon, cross-compiling) instead of the frequently-unavailable `macos-13` runner, which had left the Intel macOS asset missing from the 0.10.2 release.
+- `example/headers.yml`: corrected the base URL port (`3000` -> `9000`) so the custom-headers example reaches the example server instead of failing with connection-refused.
+- `example/benchmark.yml`: fixed the CSV `quote_char` (`"\'"` -> `"'"`, which had decoded to a backslash) so the CSV-driven POST step issues requests instead of silently parsing nothing; corrected the matching `quote_char` example in `SYNTAX.md`.
+- `example/server/Dockerfile-example-server`: copy the lockfile and use `npm ci` for reproducible builds, and pin the base image to `node:22-bookworm-slim`.
+
+### Security
+- `example/server`: `npm audit fix` clears 1 high (`path-to-regexp` ReDoS) and 3 moderate (`qs`) advisories in the example target server's transitive dependencies. The example server is a test fixture only; this does not affect the `driller` crate or binary.
 
 ### Documentation
 - `README.md`: document the `--worker-threads` / `-w` flag and link `docs/cli-reference.md` for the full flag list and the runtime workload-tuning guide.
+- `example/README.md`: use the `driller run --benchmark … --stats` form, add the missing `npm install` step, and close an unterminated code block.
 
 ## [0.10.2] - 2026-05-29
 
