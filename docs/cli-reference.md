@@ -87,6 +87,14 @@ Status codes
   2xx 2598 · 4xx 200 · 5xx 2
 ```
 
+### How latency is measured
+
+Each request's latency is measured as **time-to-last-byte**: driller starts the
+timer before sending the request and stops it only after the entire response
+body has been read. This matches the behaviour of `wrk`, `k6`, `vegeta` and
+other load-testing tools, and means endpoints that serve large bodies (files,
+large JSON) are timed for the full transfer rather than just time-to-headers.
+
 ## Configuration precedence
 
 When using `driller run` with a benchmark file, values are resolved in three

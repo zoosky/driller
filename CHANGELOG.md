@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-05-31
+
 ### Changed
+- Request latency now measures time-to-last-byte. driller reads the full
+  response body before stopping its timer, matching `wrk`, `k6`, `vegeta` and
+  other load-testing tools. Previously the timer stopped as soon as the response
+  headers arrived, and the body was only read when a request used `assign`, so
+  endpoints serving non-trivial bodies (files, large JSON) were reported as far
+  faster than they really were (fcsonline/drill#74). Reported latencies for
+  body-heavy endpoints will increase to reflect true end-to-end time.
 - `cargo-deny` now bans `native-tls`, `openssl`, and `openssl-sys`, so CI fails
   if OpenSSL is ever pulled back into the dependency tree. TLS stays on rustls;
   this guards against the prebuilt-musl OpenSSL segfault class

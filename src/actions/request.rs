@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use colored::Colorize;
 use reqwest::{
-  ClientBuilder, Method, Response,
+  ClientBuilder, Method, StatusCode,
   header::{self, HeaderMap, HeaderName, HeaderValue},
 };
 use serde_yaml::Value as YamlValue;
@@ -50,6 +50,26 @@ struct AssignedRequest {
   status: u16,
   body: Value,
   headers: Map<String, Value>,
+}
+
+/// An owned snapshot of an HTTP response, captured before its body is consumed.
+///
+/// The latency timer now spans the full body download (time-to-last-byte), which
+/// means the streaming `reqwest::Response` is consumed while the clock is still
+/// running. Anything that borrows the response -- status, headers, cookies, and
+/// the final URL -- is therefore cloned out into this struct *before* the body is
+/// drained, so callers retain access to it afterwards.
+struct ResponseData {
+  /// Final request URL, used by verbose response logging.
+  url: Url,
+  /// HTTP status of the response.
+  status: StatusCode,
+  /// Response headers, surfaced to later plan steps through `assign`.
+  headers: HeaderMap,
+  /// `Set-Cookie` name/value pairs, materialized for the cookie jar.
+  cookies: Vec<(String, String)>,
+  /// Decoded response body, retained only when the request has an `assign`.
+  body: Option<String>,
 }
 
 impl Request {
@@ -139,7 +159,7 @@ impl Request {
     }
   }
 
-  async fn send_request(&self, context: &mut Context, pool: &Pool, config: &Config) -> (Option<Response>, f64) {
+  async fn send_request(&self, context: &mut Context, pool: &Pool, config: &Config) -> (Option<ResponseData>, f64) {
     let mut uninterpolator = None;
 
     // Resolve the name
@@ -231,32 +251,72 @@ impl Request {
 
     let begin = Instant::now();
     let response_result = client.execute(request).await;
-    let duration_ms = begin.elapsed().as_secs_f64() * 1000.0;
 
-    match response_result {
+    let response = match response_result {
       Err(e) => {
+        let duration_ms = begin.elapsed().as_secs_f64() * 1000.0;
         if !config.quiet || config.verbose {
           println!("Error connecting '{}': {:?}", interpolated_base_url.as_str(), e);
         }
-        (None, duration_ms)
+        return (None, duration_ms);
       }
-      Ok(response) => {
-        if !config.quiet {
-          let status = response.status();
-          let status_text = if status.is_server_error() {
-            status.to_string().red()
-          } else if status.is_client_error() {
-            status.to_string().cyan()
-          } else {
-            status.to_string().yellow()
-          };
+      Ok(response) => response,
+    };
 
-          println!("{:width$} {} {} {}", interpolated_name.green(), interpolated_base_url.blue().bold(), status_text, Request::format_time(duration_ms, config.nanosec).cyan(), width = 25);
+    // Snapshot everything that borrows the response before the body stream is
+    // consumed below.
+    let url = response.url().clone();
+    let status = response.status();
+    let headers = response.headers().clone();
+    let cookies: Vec<(String, String)> = response.cookies().map(|cookie| (cookie.name().to_string(), cookie.value().to_string())).collect();
+
+    // Read the full response body so the measured latency reflects
+    // time-to-last-byte, matching wrk, k6, vegeta and other load-testing tools.
+    // The timer previously stopped at the response headers, which under-reported
+    // any endpoint serving a non-trivial body (files, large JSON).
+    let body_result = response.bytes().await;
+    let duration_ms = begin.elapsed().as_secs_f64() * 1000.0;
+
+    let bytes = match body_result {
+      Err(e) => {
+        if !config.quiet || config.verbose {
+          println!("Error reading body '{}': {:?}", interpolated_base_url.as_str(), e);
         }
-
-        (Some(response), duration_ms)
+        return (None, duration_ms);
       }
+      Ok(bytes) => bytes,
+    };
+
+    if !config.quiet {
+      let status_text = if status.is_server_error() {
+        status.to_string().red()
+      } else if status.is_client_error() {
+        status.to_string().cyan()
+      } else {
+        status.to_string().yellow()
+      };
+
+      println!("{:width$} {} {} {}", interpolated_name.green(), interpolated_base_url.blue().bold(), status_text, Request::format_time(duration_ms, config.nanosec).cyan(), width = 25);
     }
+
+    // The decoded body is only needed when the request assigns it to a variable;
+    // otherwise it is dropped now that the bytes have been drained and timed.
+    let body = if self.assign.is_some() {
+      Some(String::from_utf8_lossy(&bytes).into_owned())
+    } else {
+      None
+    };
+
+    (
+      Some(ResponseData {
+        url,
+        status,
+        headers,
+        cookies,
+        body,
+      }),
+      duration_ms,
+    )
   }
 }
 
@@ -321,7 +381,7 @@ impl Runnable for Request {
         status: 520u16,
       }),
       Some(response) => {
-        let status = response.status().as_u16();
+        let status = response.status.as_u16();
 
         reports.push(Report {
           name: self.name.to_owned(),
@@ -329,19 +389,19 @@ impl Runnable for Request {
           status,
         });
 
-        for cookie in response.cookies() {
+        for (name, value) in &response.cookies {
           let cookies = context.entry("cookies").or_insert_with(|| json!({})).as_object_mut().unwrap();
-          cookies.insert(cookie.name().to_string(), json!(cookie.value().to_string()));
+          cookies.insert(name.clone(), json!(value));
         }
 
         let data = if let Some(ref key) = self.assign {
           let mut headers = Map::new();
 
-          response.headers().iter().for_each(|(header, value)| {
+          response.headers.iter().for_each(|(header, value)| {
             headers.insert(header.to_string(), json!(value.to_str().unwrap()));
           });
 
-          let data = response.text().await.unwrap();
+          let data = response.body.clone().unwrap_or_default();
 
           let body: Value = serde_json::from_str(&data).unwrap_or(serde_json::Value::Null);
 
@@ -377,13 +437,13 @@ fn log_request(request: &reqwest::Request) {
   println!("{message}");
 }
 
-fn log_message_response(response: &Option<reqwest::Response>, duration_ms: f64) -> String {
+fn log_message_response(response: &Option<ResponseData>, duration_ms: f64) -> String {
   let mut message = String::new();
   match response {
     Some(response) => {
-      write!(message, " {} {},", "URL:".bold(), response.url()).unwrap();
-      write!(message, " {} {},", "STATUS:".bold(), response.status()).unwrap();
-      write!(message, " {} {:?}", "HEADERS:".bold(), response.headers()).unwrap();
+      write!(message, " {} {},", "URL:".bold(), response.url).unwrap();
+      write!(message, " {} {},", "STATUS:".bold(), response.status).unwrap();
+      write!(message, " {} {:?}", "HEADERS:".bold(), response.headers).unwrap();
       write!(message, " {} {:.4} ms,", "DURATION:".bold(), duration_ms).unwrap();
     }
     None => {
@@ -712,5 +772,68 @@ request:
       }
       _ => panic!("Expected Body::Binary"),
     }
+  }
+
+  fn test_config() -> Config {
+    Config {
+      base: String::new(),
+      concurrency: 1,
+      iterations: 1,
+      relaxed_interpolations: false,
+      no_check_certificate: false,
+      rampup: 0,
+      quiet: true,
+      nanosec: false,
+      timeout: 10,
+      verbose: false,
+      duration: None,
+    }
+  }
+
+  /// The latency timer must span the full body download (time-to-last-byte):
+  /// a server that streams its body 300ms after the headers should measure at
+  /// roughly 300ms, not ~0ms. Regression guard for the bug where the timer
+  /// stopped at the response headers and the body was never read.
+  #[test]
+  fn measures_full_body_transfer_time() {
+    use std::collections::HashMap;
+    use std::io::Read;
+    use std::net::TcpListener;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let body_delay = Duration::from_millis(300);
+
+    // A bare HTTP/1.1 server that sends the response head immediately but delays
+    // the body, so time-to-headers and time-to-last-byte differ measurably.
+    let server = thread::spawn(move || {
+      let (mut stream, _) = listener.accept().unwrap();
+      let mut buf = [0u8; 1024];
+      let _ = stream.read(&mut buf).unwrap();
+
+      let body = "x".repeat(4096);
+      let head = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+      stream.write_all(head.as_bytes()).unwrap();
+      stream.flush().unwrap();
+      thread::sleep(body_delay);
+      stream.write_all(body.as_bytes()).unwrap();
+      stream.flush().unwrap();
+    });
+
+    let url = format!("http://{addr}/");
+    let request = Request::simple_get("delayed-body", &url);
+    let mut context: Context = Context::new();
+    let pool: Pool = Arc::new(Mutex::new(HashMap::new()));
+    let config = test_config();
+
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    let (response, duration_ms) = runtime.block_on(request.send_request(&mut context, &pool, &config));
+
+    server.join().unwrap();
+
+    assert!(response.is_some(), "expected a successful response");
+    assert!(duration_ms >= 250.0, "measured {duration_ms}ms; expected >= 250ms to include the 300ms body-transfer delay");
   }
 }
