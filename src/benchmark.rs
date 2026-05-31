@@ -142,16 +142,43 @@ pub fn execute(options: &RunOptions) -> BenchmarkResult {
       let mut all_reports = Vec::new();
       let mut iteration = 0i64;
 
-      while let Some(remaining) = duration.checked_sub(begin.elapsed()) {
+      while duration.checked_sub(begin.elapsed()).is_some() {
         let batch_size = config.concurrency;
         let batch_start = iteration;
         let children = (0..batch_size).map(|i| run_iteration(benchmark.clone(), pool.clone(), config.clone(), batch_start + i));
         iteration += batch_size;
 
         let buffered = stream::iter(children).buffer_unordered(config.concurrency as usize);
-        match tokio::time::timeout(remaining, buffered.collect::<Vec<_>>()).await {
-          Ok(batch_reports) => all_reports.extend(batch_reports),
-          Err(_) => break,
+        futures::pin_mut!(buffered);
+
+        // Drain the batch one completed iteration at a time, bounded by the
+        // remaining duration. Harvesting per-item (rather than awaiting the whole
+        // batch under a single timeout, which discards the entire batch on
+        // expiry) means iterations that finished before the deadline are still
+        // counted; only requests still in flight at the deadline are dropped.
+        // This matters more now that each request waits for its full response body.
+        let mut deadline_reached = false;
+        loop {
+          let remaining = match duration.checked_sub(begin.elapsed()) {
+            Some(remaining) => remaining,
+            None => {
+              deadline_reached = true;
+              break;
+            }
+          };
+
+          match tokio::time::timeout(remaining, buffered.next()).await {
+            Ok(Some(iteration_reports)) => all_reports.push(iteration_reports),
+            Ok(None) => break, // batch fully drained; start the next batch
+            Err(_) => {
+              deadline_reached = true;
+              break;
+            }
+          }
+        }
+
+        if deadline_reached {
+          break;
         }
       }
 
