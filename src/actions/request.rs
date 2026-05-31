@@ -253,7 +253,7 @@ impl Request {
     let begin = Instant::now();
     let response_result = client.execute(request).await;
 
-    let response = match response_result {
+    let mut response = match response_result {
       Err(e) => {
         let duration_ms = begin.elapsed().as_secs_f64() * 1000.0;
         if !config.quiet || config.verbose {
@@ -275,18 +275,30 @@ impl Request {
     // time-to-last-byte, matching wrk, k6, vegeta and other load-testing tools.
     // The timer previously stopped at the response headers, which under-reported
     // any endpoint serving a non-trivial body (files, large JSON).
-    let body_result = response.bytes().await;
+    //
+    // The body is drained one chunk at a time. It is only buffered when an
+    // `assign` needs to decode it; otherwise each chunk is dropped immediately,
+    // so peak memory stays O(chunk) rather than O(body) even for large responses.
+    let mut body_buf = self.assign.is_some().then(Vec::new);
+    let drain_result = loop {
+      match response.chunk().await {
+        Ok(Some(chunk)) => {
+          if let Some(buf) = body_buf.as_mut() {
+            buf.extend_from_slice(&chunk);
+          }
+        }
+        Ok(None) => break Ok(()),
+        Err(e) => break Err(e),
+      }
+    };
     let duration_ms = begin.elapsed().as_secs_f64() * 1000.0;
 
-    let bytes = match body_result {
-      Err(e) => {
-        if !config.quiet || config.verbose {
-          println!("Error reading body '{}': {:?}", interpolated_base_url.as_str(), e);
-        }
-        return (None, duration_ms);
+    if let Err(e) = drain_result {
+      if !config.quiet || config.verbose {
+        println!("Error reading body '{}': {:?}", interpolated_base_url.as_str(), e);
       }
-      Ok(bytes) => bytes,
-    };
+      return (None, duration_ms);
+    }
 
     if !config.quiet {
       let status_text = if status.is_server_error() {
@@ -300,15 +312,10 @@ impl Request {
       println!("{:width$} {} {} {}", interpolated_name.green(), interpolated_base_url.blue().bold(), status_text, Request::format_time(duration_ms, config.nanosec).cyan(), width = 25);
     }
 
-    // The decoded body is only needed when the request assigns it to a variable;
-    // otherwise it is dropped now that the bytes have been drained and timed.
-    // Decode using the response charset (mirroring reqwest's `Response::text`)
-    // rather than assuming UTF-8, so non-UTF-8 bodies are not corrupted.
-    let body = if self.assign.is_some() {
-      Some(decode_body(&headers, &bytes))
-    } else {
-      None
-    };
+    // Decode the buffered body (only present for `assign`) using the response
+    // charset, mirroring reqwest's `Response::text`, so non-UTF-8 bodies are not
+    // corrupted.
+    let body = body_buf.map(|buf| decode_body(&headers, &buf));
 
     (
       Some(ResponseData {
@@ -896,5 +903,48 @@ request:
   fn decode_body_defaults_to_utf8() {
     let headers = HeaderMap::new();
     assert_eq!(decode_body(&headers, "hello \u{e9}".as_bytes()), "hello \u{e9}");
+  }
+
+  /// A request without `assign` must still fully drain a large body (so the
+  /// timer covers the transfer and the connection can be reused), but must not
+  /// retain it -- the chunks are dropped as they arrive rather than buffered.
+  #[test]
+  fn large_body_without_assign_is_drained_not_retained() {
+    use std::collections::HashMap;
+    use std::io::Read;
+    use std::net::TcpListener;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let body_len = 1024 * 1024; // 1 MiB
+
+    let server = thread::spawn(move || {
+      let (mut stream, _) = listener.accept().unwrap();
+      let mut buf = [0u8; 1024];
+      let _ = stream.read(&mut buf).unwrap();
+
+      let body = "x".repeat(body_len);
+      let head = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+      stream.write_all(head.as_bytes()).unwrap();
+      stream.write_all(body.as_bytes()).unwrap();
+      stream.flush().unwrap();
+    });
+
+    let url = format!("http://{addr}/");
+    let request = Request::simple_get("large-body", &url); // no `assign`
+    let mut context: Context = Context::new();
+    let pool: Pool = Arc::new(Mutex::new(HashMap::new()));
+    let config = test_config();
+
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    let (response, _duration_ms) = runtime.block_on(request.send_request(&mut context, &pool, &config));
+
+    server.join().unwrap();
+
+    let response = response.expect("expected a successful response after draining the body");
+    assert_eq!(response.status.as_u16(), 200);
+    assert!(response.body.is_none(), "a non-assign body must be drained and dropped, not retained");
   }
 }

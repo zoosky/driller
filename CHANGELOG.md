@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `assign` bodies are decoded using the response's `Content-Type` charset
     (defaulting to UTF-8), preserving the previous charset-aware behaviour now
     that driller drains the body itself instead of calling reqwest's `text()`.
+  - The body is streamed and discarded chunk by chunk; it is only buffered in
+    memory when a request uses `assign`. Peak memory therefore stays bounded per
+    in-flight request rather than scaling with the full response size, so testing
+    large-body endpoints at high concurrency does not balloon memory.
 - In `--duration` mode, iterations that complete before the deadline are now
   counted even when the deadline falls mid-batch; previously the entire
   in-flight batch was discarded when the duration elapsed. Only requests still
