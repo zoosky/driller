@@ -17,6 +17,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   endpoints serving non-trivial bodies (files, large JSON) were reported as far
   faster than they really were (fcsonline/drill#74). Reported latencies for
   body-heavy endpoints will increase to reflect true end-to-end time.
+  - Because the body read is now part of the timed request, a response whose
+    body does not finish transferring within `--timeout` is reported as a
+    connection error (synthetic status `520` / the `conn` total) rather than its
+    HTTP status. Previously such a request reported its status (e.g. `200`)
+    because the body was never read. Loosen `--timeout` if body transfer for a
+    slow or large-bodied endpoint legitimately needs more time.
+  - `assign` bodies are decoded using the response's `Content-Type` charset
+    (defaulting to UTF-8), preserving the previous charset-aware behaviour now
+    that driller drains the body itself instead of calling reqwest's `text()`.
+- In `--duration` mode, iterations that complete before the deadline are now
+  counted even when the deadline falls mid-batch; previously the entire
+  in-flight batch was discarded when the duration elapsed. Only requests still
+  in flight at the deadline are dropped.
+- In `--verbose` mode, connection and body-read failures now also print the
+  `<<<` response marker (with no body), so failed requests are visible in the
+  request/response log instead of only the inline error line.
 - `cargo-deny` now bans `native-tls`, `openssl`, and `openssl-sys`, so CI fails
   if OpenSSL is ever pulled back into the dependency tree. TLS stays on rustls;
   this guards against the prebuilt-musl OpenSSL segfault class

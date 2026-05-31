@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use colored::Colorize;
+use encoding_rs::{Encoding, UTF_8};
 use reqwest::{
   ClientBuilder, Method, StatusCode,
   header::{self, HeaderMap, HeaderName, HeaderValue},
@@ -301,8 +302,10 @@ impl Request {
 
     // The decoded body is only needed when the request assigns it to a variable;
     // otherwise it is dropped now that the bytes have been drained and timed.
+    // Decode using the response charset (mirroring reqwest's `Response::text`)
+    // rather than assuming UTF-8, so non-UTF-8 bodies are not corrupted.
     let body = if self.assign.is_some() {
-      Some(String::from_utf8_lossy(&bytes).into_owned())
+      Some(decode_body(&headers, &bytes))
     } else {
       None
     };
@@ -318,6 +321,34 @@ impl Request {
       duration_ms,
     )
   }
+}
+
+/// Decodes a response body using the charset declared in the `Content-Type`
+/// header, defaulting to UTF-8 when none is present or the label is unknown.
+///
+/// This mirrors reqwest's `Response::text`, which driller can no longer call
+/// directly: the body is drained as raw bytes inside the latency timer (so the
+/// measured duration covers the full transfer), and only then decoded for the
+/// `assign` path. Decoding the drained bytes here keeps charset-aware behaviour
+/// for non-UTF-8 responses (e.g. `charset=iso-8859-1`).
+fn decode_body(headers: &HeaderMap, bytes: &[u8]) -> String {
+  let encoding = headers.get(header::CONTENT_TYPE).and_then(|value| value.to_str().ok()).and_then(charset_from_content_type).and_then(|label| Encoding::for_label(label.as_bytes())).unwrap_or(UTF_8);
+
+  encoding.decode(bytes).0.into_owned()
+}
+
+/// Extracts the `charset` parameter value from a `Content-Type` header value,
+/// e.g. `text/html; charset=iso-8859-1` -> `iso-8859-1`. Surrounding quotes are
+/// stripped. Returns `None` when no `charset` parameter is present.
+fn charset_from_content_type(content_type: &str) -> Option<&str> {
+  content_type.split(';').skip(1).find_map(|param| {
+    let (key, value) = param.split_once('=')?;
+    if key.trim().eq_ignore_ascii_case("charset") {
+      Some(value.trim().trim_matches('"'))
+    } else {
+      None
+    }
+  })
 }
 
 fn yaml_to_json(data: YamlValue) -> Value {
@@ -375,11 +406,19 @@ impl Runnable for Request {
     };
 
     match res {
-      None => reports.push(Report {
-        name: self.name.to_owned(),
-        duration: duration_ms,
-        status: 520u16,
-      }),
+      None => {
+        reports.push(Report {
+          name: self.name.to_owned(),
+          duration: duration_ms,
+          status: 520u16,
+        });
+
+        // In verbose mode still emit the response marker so connection and
+        // body-read failures are visible in the request/response log (no body).
+        if let Some(msg) = log_message_response {
+          log_response(msg, &None);
+        }
+      }
       Some(response) => {
         let status = response.status.as_u16();
 
@@ -835,5 +874,27 @@ request:
 
     assert!(response.is_some(), "expected a successful response");
     assert!(duration_ms >= 250.0, "measured {duration_ms}ms; expected >= 250ms to include the 300ms body-transfer delay");
+  }
+
+  #[test]
+  fn charset_parsed_from_content_type() {
+    assert_eq!(charset_from_content_type("text/html; charset=iso-8859-1"), Some("iso-8859-1"));
+    assert_eq!(charset_from_content_type("text/plain;charset=\"UTF-16\""), Some("UTF-16"));
+    assert_eq!(charset_from_content_type("application/json"), None);
+    assert_eq!(charset_from_content_type("text/html; boundary=x"), None);
+  }
+
+  #[test]
+  fn decode_body_honors_declared_charset() {
+    // 0xE9 is 'e-acute' in ISO-8859-1 but invalid as standalone UTF-8.
+    let mut headers = HeaderMap::new();
+    headers.insert(header::CONTENT_TYPE, HeaderValue::from_static("text/plain; charset=iso-8859-1"));
+    assert_eq!(decode_body(&headers, &[0xE9]), "\u{e9}");
+  }
+
+  #[test]
+  fn decode_body_defaults_to_utf8() {
+    let headers = HeaderMap::new();
+    assert_eq!(decode_body(&headers, "hello \u{e9}".as_bytes()), "hello \u{e9}");
   }
 }
