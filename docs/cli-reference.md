@@ -96,6 +96,13 @@ layers (last wins):
 2. **Benchmark YAML** -- values from the file override defaults
 3. **CLI flags** -- `--concurrency`, `--iterations`, etc. override the file
 
+## Proxies
+
+driller honors the standard proxy environment variables (`HTTP_PROXY`,
+`HTTPS_PROXY`, `ALL_PROXY`, and `NO_PROXY`, plus their lowercase forms) with no
+flag or configuration. See [proxy.md](./proxy.md) for details and an enterprise
+`NO_PROXY` example.
+
 ## Tokio runtime selection
 
 `--worker-threads N` (alias `-w N`) selects which tokio runtime drives the

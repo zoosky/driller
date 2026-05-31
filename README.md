@@ -114,6 +114,9 @@ Each plan runs against the example server in [`example/server`](./example/server
   filters) dump the structure of a benchmark file without running it.
 - **Common HTTP methods** -- GET, POST, PUT, PATCH, DELETE, HEAD.
 - **Cookie propagation** -- session cookies carry across requests automatically.
+- **Proxy support** -- routes through HTTP/HTTPS proxies via the standard
+  `HTTP_PROXY`/`HTTPS_PROXY` environment variables and honors `NO_PROXY`
+  (see [docs/proxy.md](./docs/proxy.md)).
 - **Request timeout** -- per-request timeout via `--timeout`; default 10s.
 - **Shell execution** -- run external commands and capture output into variables.
 
