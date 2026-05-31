@@ -23,6 +23,16 @@ crate = "driller"
 [bans]
 multiple-versions = "warn"
 wildcards = "allow"
+# TLS goes through rustls (see the reqwest features in Cargo.toml); OpenSSL must
+# never be linked back in. The prebuilt musl binaries that dynamically linked
+# OpenSSL 1.1 segfaulted at TLS-client init, before any request was sent
+# (fcsonline/drill#168, #190). Fail the build if any dependency pulls native-tls
+# or OpenSSL back into the tree.
+deny = [
+  "native-tls",
+  "openssl",
+  "openssl-sys",
+]
 
 [sources]
 unknown-registry = "warn"

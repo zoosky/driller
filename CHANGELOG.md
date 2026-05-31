@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `cargo-deny` now bans `native-tls`, `openssl`, and `openssl-sys`, so CI fails
+  if OpenSSL is ever pulled back into the dependency tree. TLS stays on rustls;
+  this guards against the prebuilt-musl OpenSSL segfault class
+  (fcsonline/drill#168, #190).
+
 ## [0.10.3] - 2026-05-30
 
 ### Added
