@@ -66,6 +66,12 @@ async fn run_iteration(benchmark: Arc<Benchmark>, pool: Pool, config: Arc<Config
 
   context.insert("iteration".to_string(), json!(iteration.to_string()));
   context.insert("base".to_string(), json!(config.base.to_string()));
+  // Seed `index` with the iteration counter so `{{ index }}` resolves in a
+  // plain request (previously it only existed inside with_items/csv/file/range
+  // expansions, so a plain plan panicked in strict mode or interpolated to an
+  // empty string). Expanded requests still override this with their list
+  // position at execute time, so with_items semantics are unchanged.
+  context.insert("index".to_string(), json!(iteration));
 
   for item in benchmark.iter() {
     item.execute(&mut context, &mut reports, &pool, &config).await;
@@ -323,6 +329,88 @@ mod tests {
     let written = std::fs::read_to_string(&report_path).unwrap();
     let blocks = written.matches("name:").count();
     assert_eq!(blocks, iterations, "report file should hold one record per request, got: {written}");
+  }
+
+  /// `{{ index }}` must resolve in a plain request (no with_items) in strict
+  /// mode: previously it panicked with "Unknown 'index' variable". It now
+  /// resolves to the iteration counter, so a 3-iteration plan hits
+  /// `/idx/0`, `/idx/1`, `/idx/2`.
+  #[test]
+  fn plain_request_resolves_index_to_iteration() {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+    use tempfile::NamedTempFile;
+
+    let iterations = 3usize;
+    let paths = Arc::new(Mutex::new(Vec::<String>::new()));
+    let paths_srv = paths.clone();
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = thread::spawn(move || {
+      let mut handled = 0;
+      'accept: for stream in listener.incoming() {
+        let mut stream = stream.unwrap();
+        loop {
+          let mut buf = [0u8; 1024];
+          let n = match stream.read(&mut buf) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => n,
+          };
+          // Record the request-line path, e.g. "GET /idx/0 HTTP/1.1".
+          let req = String::from_utf8_lossy(&buf[..n]);
+          if let Some(path) = req.lines().next().and_then(|line| line.split_whitespace().nth(1)) {
+            paths_srv.lock().unwrap().push(path.to_string());
+          }
+          let body = "ok";
+          let resp = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}", body.len(), body);
+          if stream.write_all(resp.as_bytes()).is_err() {
+            break;
+          }
+          let _ = stream.flush();
+          handled += 1;
+          if handled >= iterations {
+            break 'accept;
+          }
+        }
+      }
+    });
+
+    let mut plan = NamedTempFile::new().unwrap();
+    write!(plan, "base: http://{addr}\nplan:\n  - name: idx\n    request:\n      url: /idx/{{{{ index }}}}\n").unwrap();
+    plan.flush().unwrap();
+
+    let options = RunOptions {
+      benchmark_path: Some(plan.path().to_str().unwrap().to_string()),
+      report_path: None,
+      base_url: None,
+      url_path: None,
+      concurrency: Some(1),
+      iterations: Some(iterations),
+      duration: None,
+      rampup: None,
+      worker_threads: None,
+      // strict mode: a missing `index` variable would previously panic here.
+      relaxed_interpolations: false,
+      no_check_certificate: false,
+      quiet: true,
+      nanosec: false,
+      timeout: 10,
+      verbose: false,
+      tags: crate::tags::Tags::new(None, None),
+    };
+
+    let result = execute(&options);
+    server.join().unwrap();
+
+    assert_eq!(result.reports.concat().len(), iterations, "every iteration should run without panicking");
+
+    let seen = paths.lock().unwrap().clone();
+    for i in 0..iterations {
+      assert!(seen.contains(&format!("/idx/{i}")), "expected /idx/{i} from index interpolation, saw: {seen:?}");
+    }
   }
 
   /// A run that completes no requests (here, a plan with only an `assign` step)

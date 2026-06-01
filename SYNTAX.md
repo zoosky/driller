@@ -86,3 +86,12 @@ Special tags: `always` and `never`.
 If you assign the `always` tag, `driller` will always run that item, unless you specifically skip it (`--skip-tags always`).
 
 If you assign the `never` tag to item, `driller` will skip that item unless you specifically request it (`--tags never`).
+
+### Built-in interpolation variables
+
+In addition to anything you `assign`, a few variables are always available to `{{ }}` templates in URLs, headers, and bodies:
+
+- `base`: the base URL from the plan (or `--base-url`).
+- `index`: a 0-based counter. Inside a `with_items` / `with_items_range` / `with_items_from_csv` / `with_items_from_file` request it is the position of the current item in that list; in any other request it is the current iteration number. Useful for generating unique paths or payloads per request, e.g. `url: /users/{{ index }}`. (The value lives in the request context shared by a plan's steps, so a plain request that runs *after* an items-expanded step in the same plan keeps that step's last item position rather than the iteration number.)
+- `iteration`: the current iteration number.
+- `item`: the current item, inside a `with_items` / `with_items_range` / `with_items_from_csv` / `with_items_from_file` request.
