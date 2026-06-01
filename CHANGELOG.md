@@ -9,12 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.11.1] - 2026-06-01
 
+### Changed
+- `--report` now runs the full benchmark and writes every request (all
+  iterations, in completion order) to the report file, honoring
+  `concurrency`/`iterations`/`duration` like any other run. Previously report
+  mode executed a single hard-coded iteration and ignored those properties, so
+  the report captured only one request per plan step (fcsonline/drill#87).
+  `--report` composes with `--stats`, which now reports over the full run.
+- `--compare` now averages both the baseline and the current run per request
+  `name` and compares each name's mean duration, instead of comparing by
+  position in the file. This keeps the verdict stable regardless of iteration
+  count or the order concurrent iterations finished in (with `concurrency > 1`
+  positions are not reproducible). A request with no matching baseline name is
+  skipped, records missing a `name`/`duration` are skipped rather than
+  panicking, and an empty or malformed baseline file now exits with a clean
+  error instead of silently reporting success.
+
 ### Fixed
 - A failed `assert` no longer aborts the run with a Rust panic and backtrace
   hint. Instead, driller prints a single `FAIL: <key> -- expected <x>, got <y>`
   line, continues the run so any remaining checks still report, and finishes
   with a non-zero exit code so CI can detect the failure. A passing run still
   exits `0`. Strict-equality semantics are unchanged.
+- `--stats --report` together no longer prints `NaN` requests-per-second and an
+  all-zero stats block. Report mode now produces real timing data, and the
+  requests-per-second divide is guarded against a zero-duration run
+  (fcsonline/drill#87).
+- `--report` no longer silently writes an empty file when a run completes no
+  requests (e.g. a plan with no `request` items, or a `--duration` shorter than
+  a single request); it prints a warning and skips the write instead.
 
 ## [0.11.0] - 2026-05-31
 

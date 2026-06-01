@@ -108,8 +108,10 @@ Each plan runs against the example server in [`example/server`](./example/server
   CSV files, or included YAML files.
 - **Statistics** -- mean, median, standard deviation, and p99/p99.5/p99.9
   latency percentiles.
-- **Benchmark comparison** -- compare runs against a saved report with
-  configurable thresholds.
+- **Benchmark comparison** -- `--report` runs the full benchmark and records
+  every request (all iterations) to a file; `--compare` checks a later run
+  against that saved report, comparing mean duration per request name with a
+  configurable threshold. `--report` composes with `--stats`.
 - **Tags** -- run or skip specific plan items by tag.
 - **Plan introspection** -- `--list-tags` and `--list-tasks` (with tag
   filters) dump the structure of a benchmark file without running it.

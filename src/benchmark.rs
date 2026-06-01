@@ -95,16 +95,17 @@ pub fn execute(options: &RunOptions) -> BenchmarkResult {
   // moved into the async block; read once below, after every iteration joins.
   let assertion_failures = config.assertion_failures.clone();
 
-  if options.report_path.is_some() {
-    println!("{}: {}. Ignoring {} and {} properties...", "Report mode".yellow(), "on".cyan(), "concurrency".yellow(), "iterations".yellow());
+  println!("{} {}", "Concurrency".yellow(), config.concurrency.to_string().cyan());
+  if let Some(ref dur) = config.duration {
+    println!("{} {}", "Duration".yellow(), format!("{}s", dur.as_secs()).cyan());
   } else {
-    println!("{} {}", "Concurrency".yellow(), config.concurrency.to_string().cyan());
-    if let Some(ref dur) = config.duration {
-      println!("{} {}", "Duration".yellow(), format!("{}s", dur.as_secs()).cyan());
-    } else {
-      println!("{} {}", "Iterations".yellow(), config.iterations.to_string().cyan());
-    }
-    println!("{} {}", "Rampup".yellow(), config.rampup.to_string().cyan());
+    println!("{} {}", "Iterations".yellow(), config.iterations.to_string().cyan());
+  }
+  println!("{} {}", "Rampup".yellow(), config.rampup.to_string().cyan());
+  // Report mode now runs the full benchmark and writes every request, so it
+  // honors concurrency/iterations/duration like any other run.
+  if let Some(ref report_path) = options.report_path {
+    println!("{} {}", "Report".yellow(), report_path.cyan());
   }
 
   println!("{} {}", "Base URL".yellow(), config.base.cyan());
@@ -137,17 +138,7 @@ pub fn execute(options: &RunOptions) -> BenchmarkResult {
     let benchmark = Arc::new(benchmark);
     let pool = Arc::new(Mutex::new(pool_store));
 
-    if let Some(report_path) = options.report_path.as_deref() {
-      let reports = run_iteration(benchmark.clone(), pool.clone(), config, 0).await;
-
-      writer::write_file(report_path, join(reports, ""));
-
-      BenchmarkResult {
-        reports: vec![],
-        duration: 0.0,
-        assertion_failures: 0,
-      }
-    } else if let Some(duration) = config.duration {
+    if let Some(duration) = config.duration {
       let begin = Instant::now();
       let mut all_reports = Vec::new();
       let mut iteration = 0i64;
@@ -216,6 +207,22 @@ pub fn execute(options: &RunOptions) -> BenchmarkResult {
     }
   });
 
+  // Report mode persists every request of the full run (all iterations,
+  // flattened in completion order), so `--compare` and downstream tooling see
+  // real data and `--stats` composes over it -- rather than the previous single
+  // hard-coded iteration.
+  if let Some(report_path) = options.report_path.as_deref() {
+    let flat: Vec<Report> = result.reports.concat();
+    if flat.is_empty() {
+      // A run that completed no requests (e.g. a plan with no `request` items,
+      // or a `--duration` shorter than a single request) would otherwise write
+      // a misleading empty report that `--compare` then rejects. Warn and skip.
+      eprintln!("{}: no requests completed; report file '{report_path}' not written", "warning".yellow());
+    } else {
+      writer::write_file(report_path, join(flat, ""));
+    }
+  }
+
   // Every iteration has joined; fold the shared assertion tally into the result
   // so `main` can translate it into a process exit code.
   result.assertion_failures = assertion_failures.load(Ordering::Relaxed);
@@ -236,5 +243,124 @@ mod tests {
   fn synthetic_plan_preserves_path() {
     let plan = build_synthetic_plan("/api/users");
     assert_eq!(plan.len(), 1);
+  }
+
+  /// Report mode must run the *whole* benchmark and persist every request, not
+  /// a single hard-coded iteration: a 3-iteration plan with `--report` should
+  /// return 3 iterations of reports and write 3 request records to the file.
+  #[test]
+  fn report_mode_runs_all_iterations() {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::thread;
+    use tempfile::NamedTempFile;
+
+    let iterations = 3usize;
+
+    // A tiny keep-alive HTTP/1.1 server that answers exactly `iterations`
+    // requests (driller pools the connection) then exits.
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = thread::spawn(move || {
+      let mut handled = 0;
+      'accept: for stream in listener.incoming() {
+        let mut stream = stream.unwrap();
+        loop {
+          let mut buf = [0u8; 1024];
+          match stream.read(&mut buf) {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {}
+          }
+          let body = "ok";
+          let resp = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}", body.len(), body);
+          if stream.write_all(resp.as_bytes()).is_err() {
+            break;
+          }
+          let _ = stream.flush();
+          handled += 1;
+          if handled >= iterations {
+            break 'accept;
+          }
+        }
+      }
+    });
+
+    let mut plan = NamedTempFile::new().unwrap();
+    write!(plan, "base: http://{addr}\nplan:\n  - name: ping\n    request:\n      url: /\n").unwrap();
+    plan.flush().unwrap();
+
+    let report = NamedTempFile::new().unwrap();
+    let report_path = report.path().to_str().unwrap().to_string();
+
+    let options = RunOptions {
+      benchmark_path: Some(plan.path().to_str().unwrap().to_string()),
+      report_path: Some(report_path.clone()),
+      base_url: None,
+      url_path: None,
+      concurrency: Some(1),
+      iterations: Some(iterations),
+      duration: None,
+      rampup: None,
+      worker_threads: None,
+      relaxed_interpolations: false,
+      no_check_certificate: false,
+      quiet: true,
+      nanosec: false,
+      timeout: 10,
+      verbose: false,
+      tags: crate::tags::Tags::new(None, None),
+    };
+
+    let result = execute(&options);
+    server.join().unwrap();
+
+    // All iterations ran (not a single hard-coded one), and `--stats` would
+    // therefore see real data rather than an empty vec.
+    assert_eq!(result.reports.len(), iterations, "report mode should run every iteration");
+    assert_eq!(result.reports.concat().len(), iterations, "one request per iteration");
+
+    // Every request is persisted to the report file.
+    let written = std::fs::read_to_string(&report_path).unwrap();
+    let blocks = written.matches("name:").count();
+    assert_eq!(blocks, iterations, "report file should hold one record per request, got: {written}");
+  }
+
+  /// A run that completes no requests (here, a plan with only an `assign` step)
+  /// must not write a misleading empty `--report` file.
+  #[test]
+  fn report_with_no_completed_requests_is_not_written() {
+    use std::io::Write;
+    use tempfile::{NamedTempFile, tempdir};
+
+    let mut plan = NamedTempFile::new().unwrap();
+    write!(plan, "plan:\n  - name: seed\n    assign:\n      key: k\n      value: v\n").unwrap();
+    plan.flush().unwrap();
+
+    let dir = tempdir().unwrap();
+    let report_path = dir.path().join("report.txt");
+
+    let options = RunOptions {
+      benchmark_path: Some(plan.path().to_str().unwrap().to_string()),
+      report_path: Some(report_path.to_str().unwrap().to_string()),
+      base_url: None,
+      url_path: None,
+      concurrency: Some(1),
+      iterations: Some(1),
+      duration: None,
+      rampup: None,
+      worker_threads: None,
+      relaxed_interpolations: false,
+      no_check_certificate: false,
+      quiet: true,
+      nanosec: false,
+      timeout: 10,
+      verbose: false,
+      tags: crate::tags::Tags::new(None, None),
+    };
+
+    let result = execute(&options);
+
+    assert!(result.reports.concat().is_empty(), "an assign-only plan issues no requests");
+    assert!(!report_path.exists(), "no report file should be written when no requests completed");
   }
 }
