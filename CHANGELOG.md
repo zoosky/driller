@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.11.2] - 2026-06-01
+## [0.11.1] - 2026-06-01
 
 ### Changed
 - `--report` now runs the full benchmark and writes every request (all
@@ -26,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   error instead of silently reporting success.
 
 ### Fixed
+- A failed `assert` no longer aborts the run with a Rust panic and backtrace
+  hint. Instead, driller prints a single `FAIL: <key> -- expected <x>, got <y>`
+  line, continues the run so any remaining checks still report, and finishes
+  with a non-zero exit code so CI can detect the failure. A passing run still
+  exits `0`. Strict-equality semantics are unchanged.
 - `--stats --report` together no longer prints `NaN` requests-per-second and an
   all-zero stats block. Report mode now produces real timing data, and the
   requests-per-second divide is guarded against a zero-duration run
@@ -33,15 +38,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--report` no longer silently writes an empty file when a run completes no
   requests (e.g. a plan with no `request` items, or a `--duration` shorter than
   a single request); it prints a warning and skips the write instead.
-
-## [0.11.1] - 2026-06-01
-
-### Fixed
-- A failed `assert` no longer aborts the run with a Rust panic and backtrace
-  hint. Instead, driller prints a single `FAIL: <key> -- expected <x>, got <y>`
-  line, continues the run so any remaining checks still report, and finishes
-  with a non-zero exit code so CI can detect the failure. A passing run still
-  exits `0`. Strict-equality semantics are unchanged.
 
 ## [0.11.0] - 2026-05-31
 
