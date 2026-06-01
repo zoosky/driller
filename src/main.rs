@@ -474,7 +474,12 @@ fn show_stats(list_reports: &[Vec<Report>], stats_option: bool, nanosec: bool, v
   // compute global stats
   let allreports = list_reports.concat();
   let global_stats = compute_stats(&allreports);
-  let requests_per_second = global_stats.total_requests as f64 / duration;
+  // Guard the divide so a zero-duration or empty run reports 0.00 rather than NaN.
+  let requests_per_second = if duration > 0.0 {
+    global_stats.total_requests as f64 / duration
+  } else {
+    0.0
+  };
 
   println!();
   println!("{:width2$} {} {}", "Time taken for tests".yellow(), format!("{duration:.1}").cyan(), "seconds".cyan(), width2 = 25);

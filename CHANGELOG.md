@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.2] - 2026-06-01
+
+### Changed
+- `--report` now runs the full benchmark and writes every request (all
+  iterations, in completion order) to the report file, honoring
+  `concurrency`/`iterations`/`duration` like any other run. Previously report
+  mode executed a single hard-coded iteration and ignored those properties, so
+  the report captured only one request per plan step (fcsonline/drill#87).
+  `--report` composes with `--stats`, which now reports over the full run.
+- `--compare` reads the report file as a flat list of request records and
+  compares the current run request-by-request against the same position; a
+  baseline shorter than the current run no longer panics (the extra requests
+  are left uncompared).
+
+### Fixed
+- `--stats --report` together no longer prints `NaN` requests-per-second and an
+  all-zero stats block. Report mode now produces real timing data, and the
+  requests-per-second divide is guarded against a zero-duration run
+  (fcsonline/drill#87).
+
 ## [0.11.1] - 2026-06-01
 
 ### Fixed

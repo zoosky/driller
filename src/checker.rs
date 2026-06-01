@@ -16,16 +16,22 @@ pub fn compare(list_reports: &[Vec<Report>], filepath: &str, threshold: f64) -> 
 
   println!();
 
-  for report in list_reports {
-    for (i, report_item) in report.iter().enumerate() {
-      let recorded_duration = items[i].get("duration").and_then(|v| v.as_f64()).unwrap();
-      let delta_ms = report_item.duration - recorded_duration;
+  // The baseline file is a flat list of request records (one per request across
+  // the whole run, the same shape `--report` writes), so compare the current run
+  // request-by-request against the same position. `get` keeps a baseline that is
+  // shorter than the current run from panicking -- the extra requests are simply
+  // not compared.
+  for (i, report_item) in list_reports.concat().iter().enumerate() {
+    let Some(item) = items.get(i) else {
+      break;
+    };
+    let recorded_duration = item.get("duration").and_then(|v| v.as_f64()).unwrap();
+    let delta_ms = report_item.duration - recorded_duration;
 
-      if delta_ms > threshold {
-        println!("{:width$} is {}{} slower than before", report_item.name.green(), delta_ms.round().to_string().red(), "ms".red(), width = 25);
+    if delta_ms > threshold {
+      println!("{:width$} is {}{} slower than before", report_item.name.green(), delta_ms.round().to_string().red(), "ms".red(), width = 25);
 
-        slow_counter += 1;
-      }
+      slow_counter += 1;
     }
   }
 
@@ -96,5 +102,28 @@ mod tests {
     let reports = vec![vec![report("a", 200.0, 200), report("b", 200.0, 200), report("c", 105.0, 200)]];
     let result = compare(&reports, f.path().to_str().unwrap(), 50.0);
     assert_eq!(result.unwrap_err(), 2);
+  }
+
+  /// A full-run report (multiple iterations) compares request-by-request
+  /// against the flattened baseline of the same shape.
+  #[test]
+  fn multi_iteration_run_compares_flattened() {
+    // baseline: two iterations of one request, recorded at 100ms each.
+    let f = comparison_file(&[100.0, 100.0]);
+    // current run: first iteration fine, second iteration slow.
+    let reports = vec![vec![report("a", 110.0, 200)], vec![report("a", 200.0, 200)]];
+    let result = compare(&reports, f.path().to_str().unwrap(), 50.0);
+    assert_eq!(result.unwrap_err(), 1);
+  }
+
+  /// A baseline shorter than the current run must not panic; the extra
+  /// requests are simply left uncompared.
+  #[test]
+  fn baseline_shorter_than_run_does_not_panic() {
+    let f = comparison_file(&[100.0]);
+    let reports = vec![vec![report("a", 110.0, 200), report("b", 999.0, 200)]];
+    let result = compare(&reports, f.path().to_str().unwrap(), 50.0);
+    // only the first request had a baseline; it was within threshold.
+    assert!(result.is_ok());
   }
 }
