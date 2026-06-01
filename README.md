@@ -110,8 +110,8 @@ Each plan runs against the example server in [`example/server`](./example/server
   latency percentiles.
 - **Benchmark comparison** -- `--report` runs the full benchmark and records
   every request (all iterations) to a file; `--compare` checks a later run
-  against that saved report with configurable thresholds. `--report` composes
-  with `--stats`.
+  against that saved report, comparing mean duration per request name with a
+  configurable threshold. `--report` composes with `--stats`.
 - **Tags** -- run or skip specific plan items by tag.
 - **Plan introspection** -- `--list-tags` and `--list-tasks` (with tag
   filters) dump the structure of a benchmark file without running it.

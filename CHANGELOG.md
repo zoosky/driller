@@ -16,10 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mode executed a single hard-coded iteration and ignored those properties, so
   the report captured only one request per plan step (fcsonline/drill#87).
   `--report` composes with `--stats`, which now reports over the full run.
-- `--compare` reads the report file as a flat list of request records and
-  compares the current run request-by-request against the same position; a
-  baseline shorter than the current run no longer panics (the extra requests
-  are left uncompared).
+- `--compare` now averages both the baseline and the current run per request
+  `name` and compares each name's mean duration, instead of comparing by
+  position in the file. This keeps the verdict stable regardless of iteration
+  count or the order concurrent iterations finished in (with `concurrency > 1`
+  positions are not reproducible). A request with no matching baseline name is
+  skipped, records missing a `name`/`duration` are skipped rather than
+  panicking, and an empty or malformed baseline file now exits with a clean
+  error instead of silently reporting success.
 
 ### Fixed
 - `--stats --report` together no longer prints `NaN` requests-per-second and an
