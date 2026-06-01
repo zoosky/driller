@@ -213,7 +213,14 @@ pub fn execute(options: &RunOptions) -> BenchmarkResult {
   // hard-coded iteration.
   if let Some(report_path) = options.report_path.as_deref() {
     let flat: Vec<Report> = result.reports.concat();
-    writer::write_file(report_path, join(flat, ""));
+    if flat.is_empty() {
+      // A run that completed no requests (e.g. a plan with no `request` items,
+      // or a `--duration` shorter than a single request) would otherwise write
+      // a misleading empty report that `--compare` then rejects. Warn and skip.
+      eprintln!("{}: no requests completed; report file '{report_path}' not written", "warning".yellow());
+    } else {
+      writer::write_file(report_path, join(flat, ""));
+    }
   }
 
   // Every iteration has joined; fold the shared assertion tally into the result
@@ -316,5 +323,44 @@ mod tests {
     let written = std::fs::read_to_string(&report_path).unwrap();
     let blocks = written.matches("name:").count();
     assert_eq!(blocks, iterations, "report file should hold one record per request, got: {written}");
+  }
+
+  /// A run that completes no requests (here, a plan with only an `assign` step)
+  /// must not write a misleading empty `--report` file.
+  #[test]
+  fn report_with_no_completed_requests_is_not_written() {
+    use std::io::Write;
+    use tempfile::{NamedTempFile, tempdir};
+
+    let mut plan = NamedTempFile::new().unwrap();
+    write!(plan, "plan:\n  - name: seed\n    assign:\n      key: k\n      value: v\n").unwrap();
+    plan.flush().unwrap();
+
+    let dir = tempdir().unwrap();
+    let report_path = dir.path().join("report.txt");
+
+    let options = RunOptions {
+      benchmark_path: Some(plan.path().to_str().unwrap().to_string()),
+      report_path: Some(report_path.to_str().unwrap().to_string()),
+      base_url: None,
+      url_path: None,
+      concurrency: Some(1),
+      iterations: Some(1),
+      duration: None,
+      rampup: None,
+      worker_threads: None,
+      relaxed_interpolations: false,
+      no_check_certificate: false,
+      quiet: true,
+      nanosec: false,
+      timeout: 10,
+      verbose: false,
+      tags: crate::tags::Tags::new(None, None),
+    };
+
+    let result = execute(&options);
+
+    assert!(result.reports.concat().is_empty(), "an assign-only plan issues no requests");
+    assert!(!report_path.exists(), "no report file should be written when no requests completed");
   }
 }

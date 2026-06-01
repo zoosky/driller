@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   all-zero stats block. Report mode now produces real timing data, and the
   requests-per-second divide is guarded against a zero-duration run
   (fcsonline/drill#87).
+- `--report` no longer silently writes an empty file when a run completes no
+  requests (e.g. a plan with no `request` items, or a `--duration` shorter than
+  a single request); it prints a warning and skips the write instead.
 
 ## [0.11.1] - 2026-06-01
 
