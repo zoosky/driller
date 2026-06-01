@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-06-01
+
+### Fixed
+- A failed `assert` no longer aborts the run with a Rust panic and backtrace
+  hint. Instead, driller prints a single `FAIL: <key> -- expected <x>, got <y>`
+  line, continues the run so any remaining checks still report, and finishes
+  with a non-zero exit code so CI can detect the failure. A passing run still
+  exits `0`. Strict-equality semantics are unchanged.
+
 ## [0.11.0] - 2026-05-31
 
 ### Changed

@@ -102,7 +102,8 @@ Each plan runs against the example server in [`example/server`](./example/server
 - **Request chaining** -- assign response data to variables and use them in
   later requests.
 - **Response checks** -- `assert` plan items compare response fields against
-  expected values; a mismatch aborts the run.
+  expected values; a mismatch prints a `FAIL` line and the run finishes with a
+  non-zero exit code, so CI can detect it.
 - **Multiple data sources** -- loop over inline lists, ranges,
   CSV files, or included YAML files.
 - **Statistics** -- mean, median, standard deviation, and p99/p99.5/p99.9

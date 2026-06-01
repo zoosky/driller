@@ -833,6 +833,7 @@ request:
       timeout: 10,
       verbose: false,
       duration: None,
+      assertion_failures: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
     }
   }
 
