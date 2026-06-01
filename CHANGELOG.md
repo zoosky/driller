@@ -38,6 +38,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--report` no longer silently writes an empty file when a run completes no
   requests (e.g. a plan with no `request` items, or a `--duration` shorter than
   a single request); it prints a warning and skips the write instead.
+- `{{ index }}` now resolves in a plain request (one with no
+  `with_items`/`with_items_range`/`with_items_from_csv`/`with_items_from_file`).
+  Previously it only existed inside those expansions, so a plain plan that
+  referenced `{{ index }}` panicked in the default strict mode ("Unknown
+  'index' variable") or interpolated to an empty string under
+  `--relaxed-interpolations` (fcsonline/drill#186). In a plain request `index`
+  is the iteration counter; inside an items expansion it remains the item's
+  position in the list.
+
+### Added
+- Documented the built-in interpolation variables (`base`, `index`,
+  `iteration`, `item`) in `SYNTAX.md`.
 
 ## [0.11.0] - 2026-05-31
 
