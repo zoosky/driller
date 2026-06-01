@@ -1,4 +1,6 @@
 use std::process;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 use std::time::Duration;
 
 use serde_yaml::Value;
@@ -25,6 +27,11 @@ pub struct Config {
   pub timeout: u64,
   pub verbose: bool,
   pub duration: Option<Duration>,
+  /// Number of `assert` checks that failed during the run. Shared across all
+  /// concurrent iterations (the run is one `Config` wrapped in an `Arc`) and
+  /// read once after every iteration has joined, so a failed assertion can set
+  /// a non-zero process exit code without aborting the run.
+  pub assertion_failures: Arc<AtomicUsize>,
 }
 
 impl Config {
@@ -95,6 +102,7 @@ impl Config {
       timeout: options.timeout,
       verbose: options.verbose,
       duration: options.duration,
+      assertion_failures: Arc::new(AtomicUsize::new(0)),
     }
   }
 }

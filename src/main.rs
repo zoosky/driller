@@ -299,10 +299,18 @@ fn main() {
   };
 
   let benchmark_result = benchmark::execute(&options);
+  let assertion_failures = benchmark_result.assertion_failures;
   let list_reports = benchmark_result.reports;
   let duration = benchmark_result.duration;
 
   show_stats(&list_reports, cli.stats, cli.nanosec, cli.verbose, duration);
+
+  // A failed `assert` check fails the whole run, ahead of any `--compare`
+  // perf verdict, so CI sees a non-zero exit code.
+  if assertion_failures > 0 {
+    eprintln!("{}: {} assertion(s) failed", "error".red().bold(), assertion_failures);
+    process::exit(1);
+  }
 
   compare_benchmark(&list_reports, cli.compare.as_deref(), cli.threshold);
 

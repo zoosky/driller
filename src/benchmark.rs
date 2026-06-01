@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -48,6 +49,10 @@ pub struct RunOptions {
 pub struct BenchmarkResult {
   pub reports: Vec<Reports>,
   pub duration: f64,
+  /// Number of `assert` checks that failed during the run. Non-zero drives a
+  /// non-zero process exit code in `main`, so a failed assertion is detectable
+  /// by CI without the run itself aborting.
+  pub assertion_failures: usize,
 }
 
 async fn run_iteration(benchmark: Arc<Benchmark>, pool: Pool, config: Arc<Config>, iteration: i64) -> Vec<Report> {
@@ -86,6 +91,10 @@ fn build_synthetic_plan(path: &str) -> Benchmark {
 pub fn execute(options: &RunOptions) -> BenchmarkResult {
   let config = Arc::new(Config::new(options));
 
+  // Held outside the runtime so the failure tally survives after `config` is
+  // moved into the async block; read once below, after every iteration joins.
+  let assertion_failures = config.assertion_failures.clone();
+
   if options.report_path.is_some() {
     println!("{}: {}. Ignoring {} and {} properties...", "Report mode".yellow(), "on".cyan(), "concurrency".yellow(), "iterations".yellow());
   } else {
@@ -109,7 +118,7 @@ pub fn execute(options: &RunOptions) -> BenchmarkResult {
     runtime::Builder::new_multi_thread().enable_all().worker_threads(worker_threads).build().unwrap()
   };
 
-  rt.block_on(async {
+  let mut result = rt.block_on(async {
     let mut benchmark: Benchmark = Benchmark::new();
     let pool_store: PoolStore = PoolStore::new();
 
@@ -136,6 +145,7 @@ pub fn execute(options: &RunOptions) -> BenchmarkResult {
       BenchmarkResult {
         reports: vec![],
         duration: 0.0,
+        assertion_failures: 0,
       }
     } else if let Some(duration) = config.duration {
       let begin = Instant::now();
@@ -187,6 +197,7 @@ pub fn execute(options: &RunOptions) -> BenchmarkResult {
       BenchmarkResult {
         reports: all_reports,
         duration: elapsed,
+        assertion_failures: 0,
       }
     } else {
       let children = (0..config.iterations).map(|iteration| run_iteration(benchmark.clone(), pool.clone(), config.clone(), iteration));
@@ -200,9 +211,15 @@ pub fn execute(options: &RunOptions) -> BenchmarkResult {
       BenchmarkResult {
         reports,
         duration,
+        assertion_failures: 0,
       }
     }
-  })
+  });
+
+  // Every iteration has joined; fold the shared assertion tally into the result
+  // so `main` can translate it into a process exit code.
+  result.assertion_failures = assertion_failures.load(Ordering::Relaxed);
+  result
 }
 
 #[cfg(test)]
