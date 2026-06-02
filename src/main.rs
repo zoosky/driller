@@ -1,17 +1,8 @@
-mod actions;
-mod benchmark;
-mod checker;
-mod config;
-mod expandable;
-mod interpolator;
-mod reader;
-mod tags;
-mod writer;
-
-use crate::actions::Report;
-use crate::benchmark::RunOptions;
 use clap::{Args, Parser, Subcommand};
 use colored::*;
+use driller::actions::Report;
+use driller::tags;
+use driller::{RunOptions, checker};
 use hdrhistogram::Histogram;
 use linked_hash_map::LinkedHashMap;
 use std::collections::BTreeMap;
@@ -298,7 +289,7 @@ fn main() {
     }
   };
 
-  let benchmark_result = benchmark::execute(&options);
+  let benchmark_result = driller::run(&options);
   let assertion_failures = benchmark_result.assertion_failures;
   let list_reports = benchmark_result.reports;
   let duration = benchmark_result.duration;

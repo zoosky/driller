@@ -46,8 +46,16 @@ pub struct RunOptions {
   pub tags: Tags,
 }
 
+/// Aggregated outcome of a benchmark run, returned by [`crate::run`].
+///
+/// Bundles the per-iteration reports, the total wall-clock time, and the
+/// assertion-failure tally so a caller (the CLI, a test, or a benchmark) can
+/// render stats and decide an exit status without re-deriving them.
 pub struct BenchmarkResult {
+  /// Per-iteration results: one inner `Vec<Report>` per completed iteration,
+  /// each holding one [`Report`] per executed step.
   pub reports: Vec<Reports>,
+  /// Total wall-clock duration of the run, in seconds.
   pub duration: f64,
   /// Number of `assert` checks that failed during the run. Non-zero drives a
   /// non-zero process exit code in `main`, so a failed assertion is detectable
@@ -94,7 +102,10 @@ fn build_synthetic_plan(path: &str) -> Benchmark {
 }
 
 /// Executes a benchmark run using the provided options.
-pub fn execute(options: &RunOptions) -> BenchmarkResult {
+///
+/// Crate-internal: external callers go through [`crate::run`], which is the
+/// library's single public entry point for executing a run.
+pub(crate) fn execute(options: &RunOptions) -> BenchmarkResult {
   let config = Arc::new(Config::new(options));
 
   // Held outside the runtime so the failure tally survives after `config` is

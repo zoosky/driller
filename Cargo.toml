@@ -16,6 +16,18 @@ exclude = [
     "example/server/",
 ]
 
+# Combined library + binary package. The library (`src/lib.rs`) is the reusable
+# load-testing engine; the binary (`src/main.rs`) is the CLI shell that drives
+# it. Targets are declared explicitly so the boundary and binary name are
+# unambiguous and so integration tests / benchmarks can `use driller::`.
+[lib]
+name = "driller"
+path = "src/lib.rs"
+
+[[bin]]
+name = "driller"
+path = "src/main.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 colored = "3"

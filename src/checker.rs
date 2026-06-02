@@ -18,9 +18,12 @@ use crate::reader;
 ///
 /// Returns `Ok(())` when every named request stays within `threshold`
 /// milliseconds of its baseline mean, or `Err(n)` where `n` is the number of
-/// names that regressed. Exits with a clean error if the baseline file is empty
-/// or is not a list of records; records missing a `name` or numeric `duration`
-/// are skipped rather than panicking.
+/// names that regressed. Records missing a `name` or numeric `duration` are
+/// skipped rather than panicking.
+///
+/// Note for library callers: a missing/empty/malformed baseline file is treated
+/// as fatal and **terminates the process** via `std::process::exit(1)` rather
+/// than returning an `Err` -- pre-validate the file if that is not acceptable.
 pub fn compare(list_reports: &[Vec<Report>], filepath: &str, threshold: f64) -> Result<(), i32> {
   let docs = reader::read_file_as_yml(filepath);
   let items = match docs.first().and_then(|doc| doc.as_sequence()) {
