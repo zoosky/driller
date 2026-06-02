@@ -23,7 +23,7 @@
 //! # Module surface
 //!
 //! The engine modules are exposed at module level for in-repo consumers
-//! (tests, benchmarks, the `harness/` crate); their members keep their original
+//! (tests, benchmarks, and sibling crates); their members keep their original
 //! visibility. `interpolator` and `writer` stay crate-private as they appear in
 //! no public interface.
 
@@ -42,13 +42,22 @@ pub use benchmark::{BenchmarkResult, RunOptions};
 
 /// Runs a benchmark to completion and returns its aggregated result.
 ///
-/// This is the library's primary entry point. The `driller` binary constructs
-/// a [`RunOptions`] from parsed command-line arguments and calls this; tests and
-/// benchmarks can do the same without going through the CLI layer.
+/// This is the library's single entry point for executing a run. The `driller`
+/// binary constructs a [`RunOptions`] from parsed command-line arguments and
+/// calls this; tests and benchmarks can do the same without going through the
+/// CLI layer.
 ///
-/// The call builds its own tokio runtime (current-thread by default, or
-/// multi-thread when `worker_threads >= 2`) and blocks until the run finishes,
-/// so it is safe to call from a synchronous context.
+/// The call builds its own tokio runtime (current-thread when `worker_threads`
+/// is `None`/`1`, multi-thread when it is `2` or more) and blocks until the run
+/// finishes, so it is safe to call from a synchronous context.
+///
+/// # Process exit on fatal input
+///
+/// Some invalid inputs are currently treated as fatal and terminate the
+/// process via `std::process::exit(1)` rather than returning -- an empty plan,
+/// and the unreadable/malformed-file paths in [`reader`]. A caller embedding
+/// the engine should pre-validate its [`RunOptions`] accordingly. Migrating
+/// these paths to returned errors is tracked as a follow-up.
 pub fn run(options: &RunOptions) -> BenchmarkResult {
   benchmark::execute(options)
 }
