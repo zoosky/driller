@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stream reassembly. Pulled in transitively via `reqwest`'s optional QUIC
   support; driller is not directly affected, but the bump keeps `--locked`
   builds and the security audit clean.
+- Bump `anyhow` 1.0.102 -> 1.0.103 to clear RUSTSEC-2026-0190, an unsoundness
+  in `Error::downcast_mut()`. Present only transitively through build-time
+  `wit-bindgen`/`getrandom` tooling; driller does not use `anyhow` directly.
 
 ## [0.11.1] - 2026-06-01
 
