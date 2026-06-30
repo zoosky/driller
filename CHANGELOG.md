@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Bump `quinn-proto` 0.11.14 -> 0.11.15 to address RUSTSEC-2026-0185, a
+  high-severity remote memory exhaustion from unbounded out-of-order QUIC
+  stream reassembly. Pulled in transitively via `reqwest`'s optional QUIC
+  support; driller is not directly affected, but the bump keeps `--locked`
+  builds and the security audit clean.
+
 ## [0.11.1] - 2026-06-01
 
 ### Changed
