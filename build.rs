@@ -14,25 +14,31 @@ use std::process::Command;
 fn main() {
   // Short git commit hash, resolved in priority order:
   //
-  //   1. A packaged `git-hash` file. `git rev-parse` only works in a checkout
-  //      with a `.git` directory; a `cargo install` from crates.io builds from
-  //      the published tarball, which strips `.git`, so the hash must travel
-  //      *inside* the package. The release/publish step writes the short hash
-  //      to `git-hash` and stages it so `cargo publish` includes it (see
-  //      CONTRIBUTING.md). This file is absent in normal checkouts.
-  //   2. `git rev-parse --short HEAD` for source builds and CI with a `.git`.
-  //      It can fail to spawn (no git on PATH), exit non-zero (not a working
-  //      tree, or "dubious ownership" in a CI checkout), or return nothing; in
-  //      every such case the output is empty and must not be embedded verbatim
-  //      (that is how a release binary once printed `0.10.2 ()`).
+  //   1. `git rev-parse --short HEAD` -- authoritative for any build from a
+  //      checkout with a `.git`. It can fail to spawn (no git on PATH), exit
+  //      non-zero (not a working tree, or "dubious ownership" in a CI
+  //      checkout), or return nothing; in every such case the output is empty
+  //      and must not be embedded verbatim (that is how a release binary once
+  //      printed `0.10.2 ()`). Trying git first means a stray `git-hash` file
+  //      left over in a working tree can never shadow the real commit.
+  //   2. A packaged `git-hash` file. A `cargo install` from crates.io builds
+  //      from the published tarball, which strips `.git`, so `git rev-parse`
+  //      finds nothing and the hash must travel *inside* the package. The
+  //      release/publish step writes the short hash to `git-hash` and stages it
+  //      so `cargo publish` includes it (see CONTRIBUTING.md). This file is
+  //      absent in normal checkouts, where step 1 already answered.
   //   3. GitHub Actions' `GITHUB_SHA` (short) -- containers without `git`,
   //      e.g. the `cross` musl build (forwarded via Cross.toml).
   //   4. "unknown", only when every source above is unavailable.
-  let git_hash = std::fs::read_to_string("git-hash")
+  let git_hash = Command::new("git")
+    .args(["rev-parse", "--short", "HEAD"])
+    .output()
     .ok()
+    .filter(|o| o.status.success())
+    .and_then(|o| String::from_utf8(o.stdout).ok())
     .map(|s| s.trim().to_string())
     .filter(|s| !s.is_empty())
-    .or_else(|| Command::new("git").args(["rev-parse", "--short", "HEAD"]).output().ok().filter(|o| o.status.success()).and_then(|o| String::from_utf8(o.stdout).ok()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()))
+    .or_else(|| std::fs::read_to_string("git-hash").ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()))
     .or_else(|| std::env::var("GITHUB_SHA").ok().map(|s| s.chars().take(7).collect::<String>()))
     .filter(|s| !s.is_empty())
     .unwrap_or_else(|| "unknown".to_string());
@@ -64,11 +70,17 @@ fn main() {
   println!("cargo:rustc-env=BUILD_TARGET={target}");
 
   // Trigger a rebuild when HEAD moves so the embedded git hash stays in
-  // sync with the working tree without needing `cargo clean`. Also rerun when
-  // the packaged `git-hash` file appears/changes (the crates.io path).
-  println!("cargo:rerun-if-changed=git-hash");
+  // sync with the working tree without needing `cargo clean`.
   println!("cargo:rerun-if-changed=.git/HEAD");
   println!("cargo:rerun-if-changed=.git/refs/heads/");
+  // Only watch `git-hash` when it actually exists (the publish/tarball path).
+  // Listing a path that does not exist makes Cargo treat the build script as
+  // always-dirty and rerun it on every build, which -- because this script
+  // emits a fresh BUILD_TIME each run -- would recompile the crate on every
+  // `cargo build` in a normal checkout.
+  if std::path::Path::new("git-hash").exists() {
+    println!("cargo:rerun-if-changed=git-hash");
+  }
 }
 
 /// Converts days since the Unix epoch (1970-01-01) into a calendar
