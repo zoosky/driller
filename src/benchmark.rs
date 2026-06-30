@@ -11,6 +11,7 @@ use tokio::time::sleep;
 
 use crate::actions::{self, Report, Runnable};
 use crate::config::Config;
+use crate::error::Error;
 use crate::expandable::include;
 use crate::tags::Tags;
 use crate::writer;
@@ -105,8 +106,13 @@ fn build_synthetic_plan(path: &str) -> Benchmark {
 ///
 /// Crate-internal: external callers go through [`crate::run`], which is the
 /// library's single public entry point for executing a run.
-pub(crate) fn execute(options: &RunOptions) -> BenchmarkResult {
-  let config = Arc::new(Config::new(options));
+///
+/// # Errors
+///
+/// Propagates configuration and plan-loading failures (see [`crate::run`]),
+/// and returns [`Error::EmptyPlan`] when the expanded plan has no items.
+pub(crate) fn execute(options: &RunOptions) -> Result<BenchmarkResult, Error> {
+  let config = Arc::new(Config::new(options)?);
 
   // Held outside the runtime so the failure tally survives after `config` is
   // moved into the async block; read once below, after every iteration joins.
@@ -141,15 +147,14 @@ pub(crate) fn execute(options: &RunOptions) -> BenchmarkResult {
     let pool_store: PoolStore = PoolStore::new();
 
     if let Some(ref benchmark_path) = options.benchmark_path {
-      include::expand_from_filepath(benchmark_path, &mut benchmark, Some("plan"), &options.tags);
+      include::expand_from_filepath(benchmark_path, &mut benchmark, Some("plan"), &options.tags)?;
     } else {
       let path = options.url_path.as_deref().unwrap_or("/");
       benchmark = build_synthetic_plan(path);
     }
 
     if benchmark.is_empty() {
-      eprintln!("Empty benchmark. Exiting.");
-      std::process::exit(1);
+      return Err(Error::EmptyPlan);
     }
 
     let benchmark = Arc::new(benchmark);
@@ -202,11 +207,11 @@ pub(crate) fn execute(options: &RunOptions) -> BenchmarkResult {
 
       let elapsed = begin.elapsed().as_secs_f64();
 
-      BenchmarkResult {
+      Ok(BenchmarkResult {
         reports: all_reports,
         duration: elapsed,
         assertion_failures: 0,
-      }
+      })
     } else {
       let children = (0..config.iterations).map(|iteration| run_iteration(benchmark.clone(), pool.clone(), config.clone(), iteration));
 
@@ -216,13 +221,13 @@ pub(crate) fn execute(options: &RunOptions) -> BenchmarkResult {
       let reports: Vec<Vec<Report>> = buffered.collect::<Vec<_>>().await;
       let duration = begin.elapsed().as_secs_f64();
 
-      BenchmarkResult {
+      Ok(BenchmarkResult {
         reports,
         duration,
         assertion_failures: 0,
-      }
+      })
     }
-  });
+  })?;
 
   // Report mode persists every request of the full run (all iterations,
   // flattened in completion order), so `--compare` and downstream tooling see
@@ -243,7 +248,7 @@ pub(crate) fn execute(options: &RunOptions) -> BenchmarkResult {
   // Every iteration has joined; fold the shared assertion tally into the result
   // so `main` can translate it into a process exit code.
   result.assertion_failures = assertion_failures.load(Ordering::Relaxed);
-  result
+  Ok(result)
 }
 
 #[cfg(test)]
@@ -328,7 +333,7 @@ mod tests {
       tags: crate::tags::Tags::new(None, None),
     };
 
-    let result = execute(&options);
+    let result = execute(&options).unwrap();
     server.join().unwrap();
 
     // All iterations ran (not a single hard-coded one), and `--stats` would
@@ -413,7 +418,7 @@ mod tests {
       tags: crate::tags::Tags::new(None, None),
     };
 
-    let result = execute(&options);
+    let result = execute(&options).unwrap();
     server.join().unwrap();
 
     assert_eq!(result.reports.concat().len(), iterations, "every iteration should run without panicking");
@@ -457,7 +462,7 @@ mod tests {
       tags: crate::tags::Tags::new(None, None),
     };
 
-    let result = execute(&options);
+    let result = execute(&options).unwrap();
 
     assert!(result.reports.concat().is_empty(), "an assign-only plan issues no requests");
     assert!(!report_path.exists(), "no report file should be written when no requests completed");

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The library no longer calls `std::process::exit` on bad input. The engine
+  (`driller::run` and the `reader`/`config`/`tags`/`checker` helpers) now
+  returns a typed `driller::Error` for an unreadable or malformed plan, an
+  invalid configuration, an empty plan, an empty/malformed `--compare`
+  baseline, and an empty tag listing, leaving the exit decision to the binary.
+  Embedding driller as a crate no longer risks having the whole host process
+  terminated from deep inside the engine. Fatal-input messages printed by the
+  CLI are now uniformly prefixed with `error:` (for example a missing
+  `--benchmark` file still prints `error: couldn't open <path>: ...` and exits
+  `1`, with no Rust panic backtrace).
+
 ### Security
 - Bump `quinn-proto` 0.11.14 -> 0.11.15 to address RUSTSEC-2026-0185, a
   high-severity remote memory exhaustion from unbounded out-of-order QUIC

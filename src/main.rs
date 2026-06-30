@@ -2,7 +2,7 @@ use clap::{Args, Parser, Subcommand};
 use colored::*;
 use driller::actions::Report;
 use driller::tags;
-use driller::{RunOptions, checker};
+use driller::{Error, RunOptions, checker};
 use hdrhistogram::Histogram;
 use linked_hash_map::LinkedHashMap;
 use std::collections::BTreeMap;
@@ -210,8 +210,16 @@ fn main() {
       eprintln!("error: --list-tags requires --benchmark");
       process::exit(1);
     });
-    tags::list_benchmark_file_tags(benchmark);
-    process::exit(0);
+    // `NoItems` already printed its own friendly line; other errors are
+    // reported here so the library never has to.
+    match tags::list_benchmark_file_tags(benchmark) {
+      Ok(()) => process::exit(0),
+      Err(Error::NoItems) => process::exit(1),
+      Err(e) => {
+        eprintln!("error: {e}");
+        process::exit(1);
+      }
+    }
   };
 
   let tags = tags::Tags::new(cli.tags.as_deref(), cli.skip_tags.as_deref());
@@ -221,8 +229,14 @@ fn main() {
       eprintln!("error: --list-tasks requires --benchmark");
       process::exit(1);
     });
-    tags::list_benchmark_file_tasks(benchmark, &tags);
-    process::exit(0);
+    match tags::list_benchmark_file_tasks(benchmark, &tags) {
+      Ok(()) => process::exit(0),
+      Err(Error::NoItems) => process::exit(1),
+      Err(e) => {
+        eprintln!("error: {e}");
+        process::exit(1);
+      }
+    }
   };
 
   let timeout = cli.timeout.as_deref().map_or(10, |t| t.parse().unwrap_or(10));
@@ -289,7 +303,13 @@ fn main() {
     }
   };
 
-  let benchmark_result = driller::run(&options);
+  let benchmark_result = match driller::run(&options) {
+    Ok(result) => result,
+    Err(e) => {
+      eprintln!("error: {e}");
+      process::exit(1);
+    }
+  };
   let assertion_failures = benchmark_result.assertion_failures;
   let list_reports = benchmark_result.reports;
   let duration = benchmark_result.duration;
@@ -490,11 +510,15 @@ fn show_stats(list_reports: &[Vec<Report>], stats_option: bool, nanosec: bool, v
 fn compare_benchmark(list_reports: &[Vec<Report>], compare_path_option: Option<&str>, threshold_option: Option<f64>) {
   if let Some(compare_path) = compare_path_option {
     if let Some(threshold) = threshold_option {
-      let compare_result = checker::compare(list_reports, compare_path, threshold);
-
-      match compare_result {
-        Ok(_) => process::exit(0),
-        Err(_) => process::exit(1),
+      // A regression verdict has already printed its per-request slowness
+      // lines; any other error is a bad/missing baseline file, reported here.
+      match checker::compare(list_reports, compare_path, threshold) {
+        Ok(()) => process::exit(0),
+        Err(Error::Regressions(_)) => process::exit(1),
+        Err(e) => {
+          eprintln!("error: {e}");
+          process::exit(1);
+        }
       }
     } else {
       eprintln!("error: --threshold is required when using --compare");
