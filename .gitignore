@@ -22,3 +22,8 @@ example/server/target
 # OS noise
 .DS_Store
 cobertura.xml
+
+# Commit-hash stamp written transiently at `cargo publish` time so a crates.io
+# install embeds the commit in `--version` (see CONTRIBUTING.md "Releasing").
+# Force-staged for the publish only; never committed.
+/git-hash

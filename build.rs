@@ -12,22 +12,27 @@
 use std::process::Command;
 
 fn main() {
-  // Short git commit hash. `git rev-parse` can fail to spawn (no git on
-  // PATH), exit non-zero (not a working tree, or "dubious ownership" in a
-  // CI checkout), or run but return nothing -- a release builder unpacking a
-  // tarball without `.git` (crates.io, some CI containers) hits these. In
-  // every one of those cases the raw output is empty, which must not be
-  // embedded verbatim (that is how a release binary printed `0.10.2 ()`).
-  // So: require a successful exit and non-empty output, otherwise fall back
-  // to GitHub Actions' `GITHUB_SHA` (short), and only then to "unknown".
-  let git_hash = Command::new("git")
-    .args(["rev-parse", "--short", "HEAD"])
-    .output()
+  // Short git commit hash, resolved in priority order:
+  //
+  //   1. A packaged `git-hash` file. `git rev-parse` only works in a checkout
+  //      with a `.git` directory; a `cargo install` from crates.io builds from
+  //      the published tarball, which strips `.git`, so the hash must travel
+  //      *inside* the package. The release/publish step writes the short hash
+  //      to `git-hash` and stages it so `cargo publish` includes it (see
+  //      CONTRIBUTING.md). This file is absent in normal checkouts.
+  //   2. `git rev-parse --short HEAD` for source builds and CI with a `.git`.
+  //      It can fail to spawn (no git on PATH), exit non-zero (not a working
+  //      tree, or "dubious ownership" in a CI checkout), or return nothing; in
+  //      every such case the output is empty and must not be embedded verbatim
+  //      (that is how a release binary once printed `0.10.2 ()`).
+  //   3. GitHub Actions' `GITHUB_SHA` (short) -- containers without `git`,
+  //      e.g. the `cross` musl build (forwarded via Cross.toml).
+  //   4. "unknown", only when every source above is unavailable.
+  let git_hash = std::fs::read_to_string("git-hash")
     .ok()
-    .filter(|o| o.status.success())
-    .and_then(|o| String::from_utf8(o.stdout).ok())
     .map(|s| s.trim().to_string())
     .filter(|s| !s.is_empty())
+    .or_else(|| Command::new("git").args(["rev-parse", "--short", "HEAD"]).output().ok().filter(|o| o.status.success()).and_then(|o| String::from_utf8(o.stdout).ok()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()))
     .or_else(|| std::env::var("GITHUB_SHA").ok().map(|s| s.chars().take(7).collect::<String>()))
     .filter(|s| !s.is_empty())
     .unwrap_or_else(|| "unknown".to_string());
@@ -59,7 +64,9 @@ fn main() {
   println!("cargo:rustc-env=BUILD_TARGET={target}");
 
   // Trigger a rebuild when HEAD moves so the embedded git hash stays in
-  // sync with the working tree without needing `cargo clean`.
+  // sync with the working tree without needing `cargo clean`. Also rerun when
+  // the packaged `git-hash` file appears/changes (the crates.io path).
+  println!("cargo:rerun-if-changed=git-hash");
   println!("cargo:rerun-if-changed=.git/HEAD");
   println!("cargo:rerun-if-changed=.git/refs/heads/");
 }
