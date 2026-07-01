@@ -7,6 +7,7 @@ use hdrhistogram::Histogram;
 use linked_hash_map::LinkedHashMap;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::io::BufRead;
 use std::process;
 use std::time::Duration;
 
@@ -186,6 +187,25 @@ fn parse_duration(s: &str) -> Duration {
   Duration::from_secs(value * multiplier)
 }
 
+/// Reads an ad-hoc target URL from `reader`, used when the positional URL is the
+/// standard stdin sentinel `-`.
+///
+/// Returns the first non-empty, whitespace-trimmed line, so
+/// `echo http://host/path | driller run -` runs the same synthetic-GET test as
+/// `driller run http://host/path`. Empty or whitespace-only input (and a read
+/// error) yields `None`, letting the caller fall through to the usual "a URL or
+/// --benchmark is required" message rather than starting an empty run.
+fn read_url_from_reader(reader: impl BufRead) -> Option<String> {
+  for line in reader.lines() {
+    let line = line.ok()?;
+    let trimmed = line.trim();
+    if !trimmed.is_empty() {
+      return Some(trimmed.to_string());
+    }
+  }
+  None
+}
+
 /// Splits a URL into its base (scheme + authority) and path components.
 fn split_url(url: &str) -> (String, String) {
   if let Some(scheme_end) = url.find("://") {
@@ -243,14 +263,21 @@ fn main() {
 
   let options = match cli.command {
     Some(Commands::Run(ref run_args)) => {
-      let (base_url, url_path) = if let Some(ref url) = run_args.url {
+      // `-` reads the ad-hoc target URL from stdin, so a single-endpoint test
+      // composes in a pipeline: `echo http://host/path | driller run - --stats`.
+      let resolved_url = match run_args.url.as_deref() {
+        Some("-") => read_url_from_reader(std::io::stdin().lock()),
+        other => other.map(str::to_string),
+      };
+
+      let (base_url, url_path) = if let Some(ref url) = resolved_url {
         let (base, path) = split_url(url);
         (run_args.base_url.clone().or(Some(base)), Some(path))
       } else {
         (run_args.base_url.clone(), None)
       };
 
-      if cli.benchmark.is_none() && run_args.url.is_none() {
+      if cli.benchmark.is_none() && resolved_url.is_none() {
         eprintln!("error: either a URL or --benchmark is required");
         eprintln!("usage: driller run <URL>");
         eprintln!("       driller run --benchmark <FILE>");
@@ -759,5 +786,36 @@ mod tests {
     let (base, path) = split_url("http://localhost:3000/health");
     assert_eq!(base, "http://localhost:3000");
     assert_eq!(path, "/health");
+  }
+
+  // -- stdin ad-hoc target (`driller run -`) ----------------------------------
+
+  #[test]
+  fn read_url_from_reader_returns_trimmed_url() {
+    let input = std::io::Cursor::new("  http://example.com/health  \n".as_bytes());
+    assert_eq!(read_url_from_reader(input), Some("http://example.com/health".to_string()));
+  }
+
+  #[test]
+  fn read_url_from_reader_skips_leading_blank_lines() {
+    let input = std::io::Cursor::new("\n   \nhttp://example.com\nhttp://ignored\n".as_bytes());
+    assert_eq!(read_url_from_reader(input), Some("http://example.com".to_string()));
+  }
+
+  #[test]
+  fn read_url_from_reader_empty_input_is_none() {
+    let input = std::io::Cursor::new("   \n\n".as_bytes());
+    assert_eq!(read_url_from_reader(input), None);
+  }
+
+  #[test]
+  fn cli_run_dash_parses_as_url_arg() {
+    // `-` must reach the positional `url` (not be rejected as a flag) so the
+    // Run arm can route it to stdin.
+    let cli = Cli::try_parse_from(["driller", "run", "-"]).unwrap();
+    match cli.command {
+      Some(Commands::Run(ref args)) => assert_eq!(args.url.as_deref(), Some("-")),
+      _ => panic!("expected Run command"),
+    }
   }
 }

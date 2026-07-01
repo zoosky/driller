@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `driller run -` reads the ad-hoc target URL from standard input, so a
+  single-endpoint load test composes in a shell pipeline -- for example
+  `echo http://localhost:9000/health | driller run - --duration 10s --stats`.
+  The URL is the first non-empty line of stdin and runs through the same
+  synthetic-GET path as `driller run <URL>`; empty input still prints the
+  standard `error: either a URL or --benchmark is required` and exits `1`.
+
 ## [0.12.0] - 2026-07-01
 
 ### Added

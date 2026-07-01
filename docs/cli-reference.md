@@ -10,7 +10,11 @@ Usage: driller run [OPTIONS] [URL]
 
 | Argument | Description |
 |---|---|
-| `[URL]` | Target URL for ad-hoc testing (creates a synthetic GET request) |
+| `[URL]` | Target URL for ad-hoc testing (creates a synthetic GET request). Pass `-` to read the URL from standard input. |
+
+`driller run -` reads the target URL from the first non-empty line of stdin, so a
+single-endpoint test drops into a shell pipeline. Empty input prints the standard
+`error: either a URL or --benchmark is required`.
 
 ### Run-specific options
 
@@ -36,6 +40,9 @@ driller run http://localhost:3000/health
 
 # 10 concurrent users, 100 total iterations
 driller run http://localhost:3000/api -p 10 -i 100 --stats
+
+# Pipe the target URL in from stdin (ad-hoc)
+echo http://localhost:3000/health | driller run - --duration 10s --stats
 
 # Run a benchmark file for 60 seconds with overridden concurrency
 driller run --benchmark bench.yml --duration 60s --concurrency 20 --stats
