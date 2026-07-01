@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-01
+
+### Added
+- A reusable **library target** (`src/lib.rs`). driller was a binary-only
+  crate; the load-testing engine is now exposed as a library with a single
+  public entry point, `driller::run(&RunOptions) -> Result<BenchmarkResult,
+  driller::Error>`, alongside the `actions`, `benchmark`, `checker`, `config`,
+  `expandable`, `reader`, and `tags` modules. Integration tests, benchmarks,
+  and sibling crates can drive the engine directly instead of shelling out to
+  the binary. The CLI (`src/main.rs`) keeps its behavior and now drives the
+  engine through this public API.
+
 ### Changed
 - The library no longer calls `std::process::exit` on bad input. The engine
   (`driller::run` and the `reader`/`config`/`tags`/`checker` helpers) now
@@ -18,6 +30,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CLI are now uniformly prefixed with `error:` (for example a missing
   `--benchmark` file still prints `error: couldn't open <path>: ...` and exits
   `1`, with no Rust panic backtrace).
+
+### Fixed
+- `driller --version` now embeds the correct commit hash for installs from
+  crates.io. The hash was derived only from `git rev-parse`, which returns
+  nothing when building the published tarball (it carries no `.git`), so
+  `cargo install driller` reported `unknown` (and once printed a bare
+  `0.11.0 ()`). The publish step now writes the release commit's short hash
+  into the packaged tarball and `build.rs` prefers it, so an installed binary
+  is traceable back to its source. The hash is still resolved via `git
+  rev-parse` first in a normal checkout, so developer builds are unaffected.
 
 ### Security
 - Bump `quinn-proto` 0.11.14 -> 0.11.15 to address RUSTSEC-2026-0185, a
@@ -229,7 +251,10 @@ See [FORK.md](./FORK.md) for rationale and migration instructions.
 - Benchmark YAML format and CLI flags are fully compatible with drill 0.9.0
 - Full upstream git history preserved
 
-[Unreleased]: https://github.com/zoosky/driller/compare/0.10.3...HEAD
+[Unreleased]: https://github.com/zoosky/driller/compare/0.12.0...HEAD
+[0.12.0]: https://github.com/zoosky/driller/compare/0.11.1...0.12.0
+[0.11.1]: https://github.com/zoosky/driller/compare/0.11.0...0.11.1
+[0.11.0]: https://github.com/zoosky/driller/compare/0.10.3...0.11.0
 [0.10.3]: https://github.com/zoosky/driller/compare/0.10.2...0.10.3
 [0.10.2]: https://github.com/zoosky/driller/compare/0.10.1...0.10.2
 [0.10.1]: https://github.com/zoosky/driller/compare/0.10.0...0.10.1
