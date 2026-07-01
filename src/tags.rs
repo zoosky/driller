@@ -1,3 +1,4 @@
+use crate::error::Error;
 use crate::reader;
 use colored::*;
 use serde_yaml::Value;
@@ -56,9 +57,15 @@ impl Tags {
   }
 }
 
-pub fn list_benchmark_file_tasks(benchmark_file: &str, tags: &Tags) {
-  let docs = reader::read_file_as_yml(benchmark_file);
-  let items = reader::read_yaml_doc_accessor(&docs[0], Some("plan"));
+/// Prints each plan item that survives the active tag filter.
+///
+/// # Errors
+///
+/// Propagates [`Error`] from reading or parsing the plan file, and returns
+/// [`Error::NoItems`] when no item remains after filtering.
+pub fn list_benchmark_file_tasks(benchmark_file: &str, tags: &Tags) -> Result<(), Error> {
+  let docs = reader::read_file_as_yml(benchmark_file)?;
+  let items = reader::read_yaml_doc_accessor(&docs[0], Some("plan"))?;
 
   println!();
 
@@ -77,24 +84,32 @@ pub fn list_benchmark_file_tasks(benchmark_file: &str, tags: &Tags) {
 
   if items.is_empty() {
     println!("{}", "No items".red());
-    std::process::exit(1)
+    return Err(Error::NoItems);
   }
 
   for item in items {
     let out_str = serde_yaml::to_string(item).unwrap();
     println!("{out_str}");
   }
+
+  Ok(())
 }
 
-pub fn list_benchmark_file_tags(benchmark_file: &str) {
-  let docs = reader::read_file_as_yml(benchmark_file);
-  let items = reader::read_yaml_doc_accessor(&docs[0], Some("plan"));
+/// Prints the union of `tags` declared across the plan's items.
+///
+/// # Errors
+///
+/// Propagates [`Error`] from reading or parsing the plan file, and returns
+/// [`Error::NoItems`] when the plan has no items.
+pub fn list_benchmark_file_tags(benchmark_file: &str) -> Result<(), Error> {
+  let docs = reader::read_file_as_yml(benchmark_file)?;
+  let items = reader::read_yaml_doc_accessor(&docs[0], Some("plan"))?;
 
   println!();
 
   if items.is_empty() {
     println!("{}", "No items".red());
-    std::process::exit(1)
+    return Err(Error::NoItems);
   }
   let mut tags: HashSet<&str> = HashSet::new();
   for item in items {
@@ -106,6 +121,8 @@ pub fn list_benchmark_file_tags(benchmark_file: &str) {
   let mut tags: Vec<_> = tags.into_iter().collect();
   tags.sort_unstable();
   println!("{:width$} {:?}", "Tags".green(), &tags, width = 15);
+
+  Ok(())
 }
 
 #[cfg(test)]

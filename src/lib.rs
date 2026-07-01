@@ -10,15 +10,25 @@
 //! # Entry point
 //!
 //! [`run`] is the single typed entry point: build a [`RunOptions`] and call it.
+//! It returns a [`Result`]; a bad plan or unreadable file comes back as an
+//! [`Error`] rather than terminating the process.
 //!
 //! ```no_run
 //! use driller::{run, RunOptions};
 //!
 //! # fn build_options() -> RunOptions { unimplemented!() }
 //! let options: RunOptions = build_options();
-//! let result = run(&options);
-//! println!("{} assertion(s) failed", result.assertion_failures);
+//! match run(&options) {
+//!   Ok(result) => println!("{} assertion(s) failed", result.assertion_failures),
+//!   Err(e) => eprintln!("error: {e}"),
+//! }
 //! ```
+//!
+//! # Errors, not exits
+//!
+//! The engine never calls [`std::process::exit`]: invalid input is reported by
+//! returning [`Error`], leaving the exit decision to the caller. The `driller`
+//! binary maps each variant to an `error: <message>` line and a non-zero exit.
 //!
 //! # Module surface
 //!
@@ -31,6 +41,7 @@ pub mod actions;
 pub mod benchmark;
 pub mod checker;
 pub mod config;
+pub mod error;
 pub mod expandable;
 pub mod reader;
 pub mod tags;
@@ -39,6 +50,7 @@ mod interpolator;
 mod writer;
 
 pub use benchmark::{BenchmarkResult, RunOptions};
+pub use error::Error;
 
 /// Runs a benchmark to completion and returns its aggregated result.
 ///
@@ -51,13 +63,12 @@ pub use benchmark::{BenchmarkResult, RunOptions};
 /// is `None`/`1`, multi-thread when it is `2` or more) and blocks until the run
 /// finishes, so it is safe to call from a synchronous context.
 ///
-/// # Process exit on fatal input
+/// # Errors
 ///
-/// Some invalid inputs are currently treated as fatal and terminate the
-/// process via `std::process::exit(1)` rather than returning -- an empty plan,
-/// and the unreadable/malformed-file paths in [`reader`]. A caller embedding
-/// the engine should pre-validate its [`RunOptions`] accordingly. Migrating
-/// these paths to returned errors is tracked as a follow-up.
-pub fn run(options: &RunOptions) -> BenchmarkResult {
+/// Returns an [`Error`] for fatal input rather than exiting the process: an
+/// unreadable or malformed plan/config file ([`Error::Io`], [`Error::Yaml`],
+/// [`Error::MissingNode`]), an invalid configuration ([`Error::InvalidConfig`]),
+/// or a plan that expands to no runnable items ([`Error::EmptyPlan`]).
+pub fn run(options: &RunOptions) -> Result<BenchmarkResult, Error> {
   benchmark::execute(options)
 }

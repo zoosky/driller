@@ -1,6 +1,7 @@
 use super::pick;
 use crate::actions::Request;
 use crate::benchmark::Benchmark;
+use crate::error::Error;
 use crate::interpolator::INTERPOLATION_REGEX;
 use crate::reader;
 use rand::rng;
@@ -12,7 +13,12 @@ pub fn is_that_you(item: &Value) -> bool {
   item.get("request").and_then(|v| v.as_mapping()).is_some() && (item.get("with_items_from_file").and_then(|v| v.as_str()).is_some() || item.get("with_items_from_file").and_then(|v| v.as_mapping()).is_some())
 }
 
-pub fn expand(parent_path: &str, item: &Value, benchmark: &mut Benchmark) {
+/// Expands a `with_items_from_file` request into one request per file line.
+///
+/// # Errors
+///
+/// Propagates [`Error`] when the items file cannot be opened.
+pub fn expand(parent_path: &str, item: &Value, benchmark: &mut Benchmark) -> Result<(), Error> {
   let with_items_path = if let Some(with_items_path) = item.get("with_items_from_file").and_then(|v| v.as_str()) {
     with_items_path
   } else {
@@ -26,7 +32,7 @@ pub fn expand(parent_path: &str, item: &Value, benchmark: &mut Benchmark) {
   let with_items_filepath = Path::new(parent_path).with_file_name(with_items_path);
   let final_path = with_items_filepath.to_str().unwrap();
 
-  let mut with_items_file = reader::read_file_as_yml_array(final_path);
+  let mut with_items_file = reader::read_file_as_yml_array(final_path)?;
 
   if let Some(true) = item.get("shuffle").and_then(|v| v.as_bool()) {
     let mut rng = rng();
@@ -39,6 +45,8 @@ pub fn expand(parent_path: &str, item: &Value, benchmark: &mut Benchmark) {
 
     benchmark.push(Box::new(Request::new(item, Some(with_item.clone()), Some(index))));
   }
+
+  Ok(())
 }
 
 #[cfg(test)]
@@ -52,7 +60,7 @@ mod test {
     let doc = &docs[0];
     let mut benchmark: Benchmark = Benchmark::new();
 
-    expand("example/benchmark.yml", doc, &mut benchmark);
+    expand("example/benchmark.yml", doc, &mut benchmark).unwrap();
 
     assert!(is_that_you(doc));
     assert_eq!(benchmark.len(), 3);
@@ -65,7 +73,7 @@ mod test {
     let doc = &docs[0];
     let mut benchmark: Benchmark = Benchmark::new();
 
-    expand("example/benchmark.yml", doc, &mut benchmark);
+    expand("example/benchmark.yml", doc, &mut benchmark).unwrap();
 
     assert!(is_that_you(doc));
     assert_eq!(benchmark.len(), 2);
@@ -78,7 +86,7 @@ mod test {
     let doc = &docs[0];
     let mut benchmark: Benchmark = Benchmark::new();
 
-    expand("example/benchmark.yml", doc, &mut benchmark);
+    expand("example/benchmark.yml", doc, &mut benchmark).unwrap();
 
     assert!(is_that_you(doc));
     assert_eq!(benchmark.len(), 1);

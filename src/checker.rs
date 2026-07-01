@@ -1,9 +1,9 @@
 use std::collections::HashMap;
-use std::process;
 
 use colored::*;
 
 use crate::actions::Report;
+use crate::error::Error;
 use crate::reader;
 
 /// Compares the current run against a baseline report file.
@@ -17,21 +17,21 @@ use crate::reader;
 /// finish out of order, so a positional comparison would not be reproducible).
 ///
 /// Returns `Ok(())` when every named request stays within `threshold`
-/// milliseconds of its baseline mean, or `Err(n)` where `n` is the number of
-/// names that regressed. Records missing a `name` or numeric `duration` are
-/// skipped rather than panicking.
+/// milliseconds of its baseline mean. Records missing a `name` or numeric
+/// `duration` are skipped rather than panicking.
 ///
-/// Note for library callers: a missing/empty/malformed baseline file is treated
-/// as fatal and **terminates the process** via `std::process::exit(1)` rather
-/// than returning an `Err` -- pre-validate the file if that is not acceptable.
-pub fn compare(list_reports: &[Vec<Report>], filepath: &str, threshold: f64) -> Result<(), i32> {
-  let docs = reader::read_file_as_yml(filepath);
+/// # Errors
+///
+/// Returns [`Error::Regressions`] (carrying the count) when one or more named
+/// requests regressed past the threshold; the per-request slowness lines are
+/// printed before returning. A missing baseline file surfaces as [`Error::Io`],
+/// and an empty or non-list baseline as [`Error::EmptyComparison`] -- the
+/// library returns these rather than exiting the process.
+pub fn compare(list_reports: &[Vec<Report>], filepath: &str, threshold: f64) -> Result<(), Error> {
+  let docs = reader::read_file_as_yml(filepath)?;
   let items = match docs.first().and_then(|doc| doc.as_sequence()) {
     Some(items) if !items.is_empty() => items,
-    _ => {
-      eprintln!("error: comparison file '{filepath}' is empty or not a list of recorded requests");
-      process::exit(1);
-    }
+    _ => return Err(Error::EmptyComparison(filepath.to_string())),
   };
 
   // Mean baseline duration per request name. Records lacking a name or a numeric
@@ -55,7 +55,7 @@ pub fn compare(list_reports: &[Vec<Report>], filepath: &str, threshold: f64) -> 
   let mut names: Vec<&String> = current.keys().collect();
   names.sort();
 
-  let mut slow_counter = 0;
+  let mut slow_counter = 0usize;
   for name in names {
     let Some(baseline_mean) = mean(&baseline, name) else {
       continue; // this request has no baseline entry -- nothing to compare against
@@ -72,7 +72,7 @@ pub fn compare(list_reports: &[Vec<Report>], filepath: &str, threshold: f64) -> 
   if slow_counter == 0 {
     Ok(())
   } else {
-    Err(slow_counter)
+    Err(Error::Regressions(slow_counter))
   }
 }
 
@@ -125,7 +125,7 @@ mod tests {
     let f = comparison_file(&[("a", 100.0), ("b", 200.0)]);
     let reports = vec![vec![report("a", 200.0, 200), report("b", 205.0, 200)]];
     let result = compare(&reports, f.path().to_str().unwrap(), 50.0);
-    assert_eq!(result.unwrap_err(), 1);
+    assert!(matches!(result.unwrap_err(), Error::Regressions(1)));
   }
 
   #[test]
@@ -149,7 +149,7 @@ mod tests {
     let f = comparison_file(&[("a", 100.0), ("b", 100.0), ("c", 100.0)]);
     let reports = vec![vec![report("a", 200.0, 200), report("b", 200.0, 200), report("c", 105.0, 200)]];
     let result = compare(&reports, f.path().to_str().unwrap(), 50.0);
-    assert_eq!(result.unwrap_err(), 2);
+    assert!(matches!(result.unwrap_err(), Error::Regressions(2)));
   }
 
   /// The verdict must not depend on the order iterations completed in -- which
@@ -163,8 +163,8 @@ mod tests {
     let r1 = compare(&order1, f.path().to_str().unwrap(), 50.0);
     let r2 = compare(&order2, f.path().to_str().unwrap(), 50.0);
     // Only `b` regressed (200ms over a 100ms baseline) in both orderings.
-    assert_eq!(r1.unwrap_err(), 1);
-    assert_eq!(r2.unwrap_err(), 1);
+    assert!(matches!(r1.unwrap_err(), Error::Regressions(1)));
+    assert!(matches!(r2.unwrap_err(), Error::Regressions(1)));
   }
 
   /// Multiple samples of the same name (multiple iterations, or a single-sample
@@ -175,7 +175,7 @@ mod tests {
     let f = comparison_file(&[("a", 100.0), ("a", 100.0)]);
     // run mean for `a` = (140 + 160) / 2 = 150, baseline mean = 100, delta 50.
     let reports = vec![vec![report("a", 140.0, 200)], vec![report("a", 160.0, 200)]];
-    assert_eq!(compare(&reports, f.path().to_str().unwrap(), 40.0).unwrap_err(), 1);
+    assert!(matches!(compare(&reports, f.path().to_str().unwrap(), 40.0).unwrap_err(), Error::Regressions(1)));
     assert!(compare(&reports, f.path().to_str().unwrap(), 60.0).is_ok());
   }
 

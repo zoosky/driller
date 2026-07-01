@@ -2,38 +2,44 @@ use serde_yaml::{Mapping, Value};
 use std::fs::File;
 use std::io::{BufReader, prelude::*};
 use std::path::Path;
-use std::process;
 
-/// Prints `error: <msg>` to stderr and exits with status 1.
+use crate::error::Error;
+
+/// Reads a whole file into a `String`.
 ///
-/// Used at boundaries where user-supplied paths or file contents
-/// turn out to be invalid. Avoids the Rust panic + backtrace hint
-/// that `panic!` would produce, which reads as a crash rather than
-/// a user-input problem.
-fn die(msg: impl std::fmt::Display) -> ! {
-  eprintln!("error: {msg}");
-  process::exit(1)
-}
-
-pub fn read_file(filepath: &str) -> String {
-  // Create a path to the desired file
+/// Used at boundaries where a user-supplied path may legitimately be wrong, so
+/// failures are returned as [`Error::Io`] (rendered as a clean `couldn't
+/// open/read <path>: ...` line by the binary) rather than panicking with a
+/// backtrace hint that reads as a crash.
+pub fn read_file(filepath: &str) -> Result<String, Error> {
   let path = Path::new(filepath);
-  let display = path.display();
+  let display = path.display().to_string();
 
-  // Open the path in read-only mode, returns `io::Result<File>`
-  let mut file = File::open(path).unwrap_or_else(|why| die(format!("couldn't open {display}: {why}")));
+  // Open the path in read-only mode.
+  let mut file = File::open(path).map_err(|source| Error::Io {
+    action: "open",
+    path: display.clone(),
+    source,
+  })?;
 
-  // Read the file contents into a string, returns `io::Result<usize>`
+  // Read the file contents into a string.
   let mut content = String::new();
-  if let Err(why) = file.read_to_string(&mut content) {
-    die(format!("couldn't read {display}: {why}"));
-  }
+  file.read_to_string(&mut content).map_err(|source| Error::Io {
+    action: "read",
+    path: display,
+    source,
+  })?;
 
-  content
+  Ok(content)
 }
 
-fn parse_yaml_content(content: &str) -> Vec<Value> {
-  // serde_yaml doesn't support multiple documents natively, so we split by "---\n" and parse each
+/// Parses YAML text into one or more documents.
+///
+/// serde_yaml does not expose multi-document parsing, so multi-document input
+/// (separated by `---\n`) is split and each part parsed individually. An empty
+/// or comment-only input yields a single `Null` document to keep callers that
+/// index `[0]` working.
+fn parse_yaml_content(content: &str) -> Result<Vec<Value>, Error> {
   let mut docs = Vec::new();
   let trimmed_content = content.trim();
 
@@ -44,14 +50,13 @@ fn parse_yaml_content(content: &str) -> Vec<Value> {
       let trimmed = doc_str.trim();
       // Skip empty parts and parts that are only comments
       if !trimmed.is_empty() && !trimmed.chars().all(|c| c == '#' || c.is_whitespace() || c == '\n') {
-        match serde_yaml::from_str::<Value>(trimmed) {
-          Ok(doc) => {
-            // Skip Null documents (which can result from comments-only content)
-            if !matches!(doc, Value::Null) {
-              docs.push(doc);
-            }
-          }
-          Err(e) => die(format!("failed to parse YAML document: {e}")),
+        let doc = serde_yaml::from_str::<Value>(trimmed).map_err(|source| Error::Yaml {
+          what: "document",
+          source,
+        })?;
+        // Skip Null documents (which can result from comments-only content)
+        if !matches!(doc, Value::Null) {
+          docs.push(doc);
         }
       }
     }
@@ -61,13 +66,12 @@ fn parse_yaml_content(content: &str) -> Vec<Value> {
   if docs.is_empty() {
     // Remove leading "---\n" if present for single-document files
     let content_to_parse = trimmed_content.strip_prefix("---\n").unwrap_or(trimmed_content);
-    match serde_yaml::from_str::<Value>(content_to_parse.trim()) {
-      Ok(doc) => {
-        if !matches!(doc, Value::Null) {
-          docs.push(doc);
-        }
-      }
-      Err(e) => die(format!("failed to parse YAML content: {e}")),
+    let doc = serde_yaml::from_str::<Value>(content_to_parse.trim()).map_err(|source| Error::Yaml {
+      what: "content",
+      source,
+    })?;
+    if !matches!(doc, Value::Null) {
+      docs.push(doc);
     }
   }
 
@@ -76,35 +80,46 @@ fn parse_yaml_content(content: &str) -> Vec<Value> {
     docs.push(Value::Null);
   }
 
-  docs
+  Ok(docs)
 }
 
-pub fn read_file_as_yml(filepath: &str) -> Vec<Value> {
-  let content = read_file(filepath);
+/// Reads a YAML file and parses it into one or more documents.
+pub fn read_file_as_yml(filepath: &str) -> Result<Vec<Value>, Error> {
+  let content = read_file(filepath)?;
   parse_yaml_content(&content)
 }
 
 #[cfg(test)]
 pub fn read_file_as_yml_from_str(content: &str) -> Vec<Value> {
-  parse_yaml_content(content)
+  parse_yaml_content(content).expect("test fixture YAML should parse")
 }
 
-pub fn read_yaml_doc_accessor<'a>(doc: &'a Value, accessor: Option<&str>) -> &'a Vec<Value> {
+/// Returns the sequence of items at `accessor` (e.g. `plan`), or the document
+/// itself as a sequence when `accessor` is `None`.
+///
+/// A missing node or a non-sequence document is a user-supplied-config problem,
+/// returned as [`Error::MissingNode`] / [`Error::NotASequence`].
+pub fn read_yaml_doc_accessor<'a>(doc: &'a Value, accessor: Option<&str>) -> Result<&'a Vec<Value>, Error> {
   if let Some(accessor_id) = accessor {
     match doc.get(accessor_id).and_then(|v| v.as_sequence()) {
-      Some(items) => items,
-      None => die(format!("node missing on config: {accessor_id}")),
+      Some(items) => Ok(items),
+      None => Err(Error::MissingNode(accessor_id.to_string())),
     }
   } else {
-    doc.as_sequence().unwrap_or_else(|| die(format!("expected document to be a sequence, got: {doc:?}")))
+    doc.as_sequence().ok_or_else(|| Error::NotASequence(format!("{doc:?}")))
   }
 }
 
-pub fn read_file_as_yml_array(filepath: &str) -> Vec<Value> {
+/// Reads a file as a list of strings, one per line, wrapped as YAML values.
+pub fn read_file_as_yml_array(filepath: &str) -> Result<Vec<Value>, Error> {
   let path = Path::new(filepath);
-  let display = path.display();
+  let display = path.display().to_string();
 
-  let file = File::open(path).unwrap_or_else(|why| die(format!("couldn't open {display}: {why}")));
+  let file = File::open(path).map_err(|source| Error::Io {
+    action: "open",
+    path: display,
+    source,
+  })?;
 
   let reader = BufReader::new(file);
   let mut items = Vec::new();
@@ -117,23 +132,29 @@ pub fn read_file_as_yml_array(filepath: &str) -> Vec<Value> {
     }
   }
 
-  items
+  Ok(items)
 }
 
 // TODO: Try to split this fn into two
-pub fn read_csv_file_as_yml(filepath: &str, quote: u8) -> Vec<Value> {
-  // Create a path to the desired file
+/// Reads a CSV file into a list of YAML mappings keyed by the header row.
+pub fn read_csv_file_as_yml(filepath: &str, quote: u8) -> Result<Vec<Value>, Error> {
   let path = Path::new(filepath);
-  let display = path.display();
+  let display = path.display().to_string();
 
-  // Open the path in read-only mode, returns `io::Result<File>`
-  let file = File::open(path).unwrap_or_else(|why| die(format!("couldn't open {display}: {why}")));
+  let file = File::open(path).map_err(|source| Error::Io {
+    action: "open",
+    path: display.clone(),
+    source,
+  })?;
 
   let mut rdr = csv::ReaderBuilder::new().has_headers(true).quote(quote).from_reader(file);
 
   let mut items = Vec::new();
 
-  let headers = rdr.headers().cloned().unwrap_or_else(|why| die(format!("couldn't parse CSV header in {display}: {why}")));
+  let headers = rdr.headers().cloned().map_err(|source| Error::Csv {
+    path: display,
+    source,
+  })?;
 
   for result in rdr.records() {
     match result {
@@ -153,5 +174,5 @@ pub fn read_csv_file_as_yml(filepath: &str, quote: u8) -> Vec<Value> {
     }
   }
 
-  items
+  Ok(items)
 }

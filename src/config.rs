@@ -1,4 +1,3 @@
-use std::process;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::time::Duration;
@@ -6,6 +5,7 @@ use std::time::Duration;
 use serde_yaml::Value;
 
 use crate::benchmark::{Context, RunOptions};
+use crate::error::Error;
 use crate::interpolator;
 use crate::reader;
 
@@ -44,7 +44,13 @@ impl Config {
 
   /// Constructs configuration using three-layer precedence:
   /// hard-coded defaults < benchmark YAML file < CLI flags.
-  pub fn new(options: &RunOptions) -> Config {
+  ///
+  /// # Errors
+  ///
+  /// Returns [`Error::Io`] / [`Error::Yaml`] if the benchmark file cannot be
+  /// read or parsed, or [`Error::InvalidConfig`] if the resolved values fail
+  /// validation (for example concurrency exceeding the iteration count).
+  pub fn new(options: &RunOptions) -> Result<Config, Error> {
     // Layer 1: hard-coded defaults
     let mut base = String::new();
     let mut iterations = NITERATIONS;
@@ -53,7 +59,7 @@ impl Config {
 
     // Layer 2: benchmark YAML file values (if a file was provided)
     if let Some(ref path) = options.benchmark_path {
-      let config_docs = reader::read_file_as_yml(path);
+      let config_docs = reader::read_file_as_yml(path)?;
       let config_doc = &config_docs[0];
 
       let context: Context = Context::new();
@@ -85,12 +91,9 @@ impl Config {
       rampup = 0;
     }
 
-    if let Err(msg) = Self::validate(concurrency, iterations, options.duration) {
-      eprintln!("error: {msg}");
-      process::exit(1);
-    }
+    Self::validate(concurrency, iterations, options.duration).map_err(Error::InvalidConfig)?;
 
-    Config {
+    Ok(Config {
       base,
       concurrency,
       iterations,
@@ -103,7 +106,7 @@ impl Config {
       verbose: options.verbose,
       duration: options.duration,
       assertion_failures: Arc::new(AtomicUsize::new(0)),
-    }
+    })
   }
 }
 
@@ -194,7 +197,7 @@ mod tests {
 
   #[test]
   fn defaults_without_file_or_cli() {
-    let config = Config::new(&default_options());
+    let config = Config::new(&default_options()).unwrap();
     assert_eq!(config.iterations, 1);
     assert_eq!(config.concurrency, 1);
     assert_eq!(config.rampup, 0);
@@ -212,7 +215,7 @@ mod tests {
       benchmark_path: Some(f.path().to_str().unwrap().to_string()),
       ..default_options()
     };
-    let config = Config::new(&options);
+    let config = Config::new(&options).unwrap();
     assert_eq!(config.base, "http://example.com");
     assert_eq!(config.iterations, 50);
     assert_eq!(config.concurrency, 10);
@@ -226,7 +229,7 @@ mod tests {
       benchmark_path: Some(f.path().to_str().unwrap().to_string()),
       ..default_options()
     };
-    let config = Config::new(&options);
+    let config = Config::new(&options).unwrap();
     assert_eq!(config.iterations, 50);
     assert_eq!(config.concurrency, 50);
   }
@@ -244,7 +247,7 @@ mod tests {
       rampup: Some(10),
       ..default_options()
     };
-    let config = Config::new(&options);
+    let config = Config::new(&options).unwrap();
     assert_eq!(config.base, "http://staging:3000");
     assert_eq!(config.iterations, 100);
     assert_eq!(config.concurrency, 20);
@@ -259,7 +262,7 @@ mod tests {
       concurrency: Some(20),
       ..default_options()
     };
-    let config = Config::new(&options);
+    let config = Config::new(&options).unwrap();
     assert_eq!(config.concurrency, 20);
     assert_eq!(config.iterations, 100);
     assert_eq!(config.rampup, 5);
@@ -275,7 +278,7 @@ mod tests {
       rampup: Some(2),
       ..default_options()
     };
-    let config = Config::new(&options);
+    let config = Config::new(&options).unwrap();
     assert_eq!(config.base, "http://test:8080");
     assert_eq!(config.iterations, 10);
     assert_eq!(config.concurrency, 5);
@@ -291,7 +294,7 @@ mod tests {
       duration: Some(Duration::from_secs(30)),
       ..default_options()
     };
-    let config = Config::new(&options);
+    let config = Config::new(&options).unwrap();
     assert_eq!(config.rampup, 0);
     assert_eq!(config.duration, Some(Duration::from_secs(30)));
   }
@@ -303,7 +306,7 @@ mod tests {
       duration: Some(Duration::from_secs(30)),
       ..default_options()
     };
-    let config = Config::new(&options);
+    let config = Config::new(&options).unwrap();
     assert_eq!(config.concurrency, 10);
     assert_eq!(config.iterations, 1);
   }
@@ -315,7 +318,7 @@ mod tests {
       duration: Some(dur),
       ..default_options()
     };
-    let config = Config::new(&options);
+    let config = Config::new(&options).unwrap();
     assert_eq!(config.duration, Some(dur));
   }
 
@@ -349,7 +352,7 @@ mod tests {
       timeout: 42,
       ..default_options()
     };
-    let config = Config::new(&options);
+    let config = Config::new(&options).unwrap();
     assert!(config.relaxed_interpolations);
     assert!(config.no_check_certificate);
     assert!(config.quiet);
