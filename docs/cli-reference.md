@@ -75,6 +75,7 @@ form:
 | `--quiet` | `-q` | Disables output |
 | `--timeout <SECONDS>` | `-o` | Request timeout in seconds (default: 10) |
 | `--nanosec` | `-n` | Shows statistics in nanoseconds |
+| `--stats-format <text\|json>` | | Statistics output format (default: `text`) |
 | `--verbose` | `-v` | Toggle verbose output |
 
 ### Statistics output (`--stats`)
@@ -95,6 +96,84 @@ Status codes
   404                     200
   500                     2
   2xx 2598 · 4xx 200 · 5xx 2
+```
+
+### Machine-readable statistics (`--stats-format json`)
+
+`--stats-format json` emits the same statistics as a single JSON document to
+stdout instead of the colored text, so a CI gate, dashboard, or trending script
+can act on the numbers with `jq` rather than scraping ANSI-decorated text. It
+implies `--stats` (you need not pass both).
+
+The contract is that **stdout carries only the JSON document**: the run banner
+(`Concurrency`, `Base URL`, ...) and any warnings are routed to stderr, and
+per-request progress is suppressed (as with `--quiet`), so
+`driller run ... --stats-format json | jq .` always sees valid JSON.
+
+Because `--compare` also writes its verdict to stdout, it cannot be combined
+with `--stats-format json` -- the same restriction `--stats` carries.
+
+```json
+{
+  "schema": 1,
+  "duration_s": 4.7,
+  "requests_per_second": 595.3,
+  "global": {
+    "total_requests": 2800,
+    "successful_requests": 2598,
+    "failed_requests": 202,
+    "status_counts": { "200": 2598, "404": 200, "500": 2 },
+    "class_rollup": { "2xx": 2598, "4xx": 200, "5xx": 2, "connection_errors": 0 },
+    "latency_ms": {
+      "mean": 1.62, "median": 1.40, "stdev": 0.91,
+      "p99": 4.10, "p995": 5.02, "p999": 8.77
+    }
+  },
+  "steps": [
+    {
+      "name": "Fetch users",
+      "total_requests": 1400,
+      "successful_requests": 1400,
+      "failed_requests": 0,
+      "status_counts": { "200": 1400 },
+      "class_rollup": { "2xx": 1400, "connection_errors": 0 },
+      "latency_ms": { "mean": 1.51, "median": 1.30, "stdev": 0.80, "p99": 3.9, "p995": 4.8, "p999": 7.1 }
+    }
+  ]
+}
+```
+
+Field notes:
+
+- `schema` is an integer version for the document shape. It may bump in a future
+  release; consumers should check it before relying on a layout.
+- `status_counts` maps each exact HTTP status code to its request count. The
+  synthetic status `520` denotes a connection error (driller could not reach the
+  target).
+- `class_rollup` sums each HTTP family (`2xx`/`3xx`/`4xx`/`5xx`); a family is
+  present only when its count is non-zero. `connection_errors` is always present
+  and holds the `520` tally, kept separate from `5xx`.
+- `latency_ms` values are raw numbers in **milliseconds** (floats). `--nanosec`
+  affects only the text format, not the JSON numbers.
+- `steps` carries the same per-step shape in plan order, each tagged with its
+  step `name`.
+
+`--stats-format` governs only the statistics summary. It does not change
+`--report` / `--compare`, which write and read a separate raw per-request file.
+
+Example CI gate that fails the build on a p99 regression or any connection
+error:
+
+```bash
+summary=$(driller run http://localhost:3000/api -p 20 -i 2000 --stats-format json)
+
+p99=$(echo "$summary" | jq '.global.latency_ms.p99')
+conn=$(echo "$summary" | jq '.global.class_rollup.connection_errors')
+
+echo "$summary" | jq -e '.global.latency_ms.p99 < 500' >/dev/null \
+  || { echo "p99 ${p99}ms exceeds 500ms budget"; exit 1; }
+echo "$summary" | jq -e '.global.class_rollup.connection_errors == 0' >/dev/null \
+  || { echo "${conn} connection error(s)"; exit 1; }
 ```
 
 ### How latency is measured

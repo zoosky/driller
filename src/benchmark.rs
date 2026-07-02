@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -44,6 +45,10 @@ pub struct RunOptions {
   pub nanosec: bool,
   pub timeout: u64,
   pub verbose: bool,
+  /// Reserve stdout for a machine-readable summary emitted by the caller: the
+  /// run banner is written to stderr instead of stdout so a consumer piping
+  /// stdout (e.g. `--stats-format json | jq`) sees only that summary.
+  pub machine_readable: bool,
   pub tags: Tags,
 }
 
@@ -118,21 +123,32 @@ pub(crate) fn execute(options: &RunOptions) -> Result<BenchmarkResult, Error> {
   // moved into the async block; read once below, after every iteration joins.
   let assertion_failures = config.assertion_failures.clone();
 
-  println!("{} {}", "Concurrency".yellow(), config.concurrency.to_string().cyan());
+  // Build the run banner up front so it can be emitted to a single stream. In
+  // `machine_readable` mode stdout is reserved for the caller's structured
+  // summary, so the banner goes to stderr; otherwise it prints to stdout as
+  // before (byte-for-byte).
+  let mut banner = String::new();
+  writeln!(banner, "{} {}", "Concurrency".yellow(), config.concurrency.to_string().cyan()).unwrap();
   if let Some(ref dur) = config.duration {
-    println!("{} {}", "Duration".yellow(), format!("{}s", dur.as_secs()).cyan());
+    writeln!(banner, "{} {}", "Duration".yellow(), format!("{}s", dur.as_secs()).cyan()).unwrap();
   } else {
-    println!("{} {}", "Iterations".yellow(), config.iterations.to_string().cyan());
+    writeln!(banner, "{} {}", "Iterations".yellow(), config.iterations.to_string().cyan()).unwrap();
   }
-  println!("{} {}", "Rampup".yellow(), config.rampup.to_string().cyan());
+  writeln!(banner, "{} {}", "Rampup".yellow(), config.rampup.to_string().cyan()).unwrap();
   // Report mode now runs the full benchmark and writes every request, so it
   // honors concurrency/iterations/duration like any other run.
   if let Some(ref report_path) = options.report_path {
-    println!("{} {}", "Report".yellow(), report_path.cyan());
+    writeln!(banner, "{} {}", "Report".yellow(), report_path.cyan()).unwrap();
   }
 
-  println!("{} {}", "Base URL".yellow(), config.base.cyan());
-  println!();
+  writeln!(banner, "{} {}", "Base URL".yellow(), config.base.cyan()).unwrap();
+  writeln!(banner).unwrap();
+
+  if options.machine_readable {
+    eprint!("{banner}");
+  } else {
+    print!("{banner}");
+  }
 
   // 1 (default) selects the current-thread runtime; N >= 2 selects multi-thread with N workers.
   let worker_threads = options.worker_threads.unwrap_or(1);
@@ -330,6 +346,7 @@ mod tests {
       nanosec: false,
       timeout: 10,
       verbose: false,
+      machine_readable: false,
       tags: crate::tags::Tags::new(None, None),
     };
 
@@ -415,6 +432,7 @@ mod tests {
       nanosec: false,
       timeout: 10,
       verbose: false,
+      machine_readable: false,
       tags: crate::tags::Tags::new(None, None),
     };
 
@@ -459,6 +477,7 @@ mod tests {
       nanosec: false,
       timeout: 10,
       verbose: false,
+      machine_readable: false,
       tags: crate::tags::Tags::new(None, None),
     };
 

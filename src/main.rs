@@ -1,12 +1,11 @@
+mod stats;
+
 use clap::{Args, Parser, Subcommand};
 use colored::*;
 use driller::actions::Report;
 use driller::tags;
 use driller::{Error, RunOptions, checker};
-use hdrhistogram::Histogram;
-use linked_hash_map::LinkedHashMap;
-use std::collections::BTreeMap;
-use std::collections::HashMap;
+use stats::{StatsFormat, show_stats};
 use std::io::{BufRead, IsTerminal};
 use std::process;
 use std::time::Duration;
@@ -88,6 +87,10 @@ struct Cli {
   /// Shows statistics in nanoseconds
   #[arg(short, long, global = true)]
   nanosec: bool,
+
+  /// Statistics output format (json implies --stats and keeps stdout pure)
+  #[arg(long, value_enum, default_value_t = StatsFormat::Text, global = true)]
+  stats_format: StatsFormat,
 
   /// Toggle verbose output
   #[arg(short, long, global = true)]
@@ -266,6 +269,21 @@ fn main() {
 
   let timeout = cli.timeout.as_deref().map_or(10, |t| t.parse().unwrap_or(10));
 
+  // In JSON mode stdout is reserved for the single stats document, so the engine
+  // must stay silent there: its banner is routed to stderr (`machine_readable`)
+  // and per-request progress/verbose tracing is suppressed. The JSON summary
+  // carries the same information machine-readably.
+  let json_mode = cli.stats_format == StatsFormat::Json;
+
+  // `--compare` writes its perf verdict to stdout, which would corrupt the lone
+  // JSON stats document, so the two are mutually exclusive -- mirroring the
+  // `conflicts_with = "compare"` that `--stats` already carries (JSON mode
+  // implies `--stats`). Rejected up front, before any run work.
+  if json_mode && cli.compare.is_some() {
+    eprintln!("error: --stats-format json cannot be combined with --compare (both write to stdout)");
+    process::exit(1);
+  }
+
   let options = match cli.command {
     Some(Commands::Run(ref run_args)) => {
       // `-` reads the ad-hoc target URL from stdin, so a single-endpoint test
@@ -335,10 +353,11 @@ fn main() {
         worker_threads: run_args.worker_threads,
         relaxed_interpolations: cli.relaxed_interpolations,
         no_check_certificate: cli.no_check_certificate,
-        quiet: cli.quiet,
+        quiet: cli.quiet || json_mode,
         nanosec: cli.nanosec,
         timeout,
-        verbose: cli.verbose,
+        verbose: cli.verbose && !json_mode,
+        machine_readable: json_mode,
         tags,
       }
     }
@@ -360,10 +379,11 @@ fn main() {
         worker_threads: None,
         relaxed_interpolations: cli.relaxed_interpolations,
         no_check_certificate: cli.no_check_certificate,
-        quiet: cli.quiet,
+        quiet: cli.quiet || json_mode,
         nanosec: cli.nanosec,
         timeout,
-        verbose: cli.verbose,
+        verbose: cli.verbose && !json_mode,
+        machine_readable: json_mode,
         tags,
       }
     }
@@ -380,7 +400,7 @@ fn main() {
   let list_reports = benchmark_result.reports;
   let duration = benchmark_result.duration;
 
-  show_stats(&list_reports, cli.stats, cli.nanosec, cli.verbose, duration);
+  show_stats(&list_reports, cli.stats, cli.stats_format, cli.nanosec, cli.verbose, duration);
 
   // A failed `assert` check fails the whole run, ahead of any `--compare`
   // perf verdict, so CI sees a non-zero exit code.
@@ -392,185 +412,6 @@ fn main() {
   compare_benchmark(&list_reports, cli.compare.as_deref(), cli.threshold);
 
   process::exit(0)
-}
-
-struct DrillStats {
-  total_requests: usize,
-  successful_requests: usize,
-  failed_requests: usize,
-  /// Count of requests per exact HTTP status code, sorted ascending. The
-  /// synthetic status 520 represents a connection error (see actions::request).
-  status_counts: BTreeMap<u16, usize>,
-  hist: Histogram<u64>,
-}
-
-impl DrillStats {
-  fn mean_duration(&self) -> f64 {
-    self.hist.mean() / 1_000.0
-  }
-  fn median_duration(&self) -> f64 {
-    self.hist.value_at_quantile(0.5) as f64 / 1_000.0
-  }
-  fn stdev_duration(&self) -> f64 {
-    self.hist.stdev() / 1_000.0
-  }
-  fn value_at_quantile(&self, quantile: f64) -> f64 {
-    self.hist.value_at_quantile(quantile) as f64 / 1_000.0
-  }
-}
-
-fn compute_stats(sub_reports: &[Report]) -> DrillStats {
-  // Values are recorded in microseconds (duration_ms * 1000), so the upper
-  // bound must also be in microseconds. 1 hour = 3_600_000_000 us.
-  let mut hist = Histogram::<u64>::new_with_bounds(1, 60 * 60 * 1_000_000, 2).unwrap();
-  let mut group_by_status = HashMap::new();
-
-  for req in sub_reports {
-    group_by_status.entry(req.status / 100).or_insert_with(Vec::new).push(req);
-  }
-
-  for r in sub_reports.iter() {
-    let duration_us = (r.duration * 1_000.0) as u64;
-    if let Err(e) = hist.record(duration_us) {
-      eprintln!("warning: request '{}' duration {:.0}ms exceeds histogram range, skipped: {}", r.name, r.duration, e);
-    }
-  }
-
-  // Count of each exact status code (BTreeMap keeps them sorted for display).
-  let mut status_counts: BTreeMap<u16, usize> = BTreeMap::new();
-  for req in sub_reports {
-    *status_counts.entry(req.status).or_insert(0) += 1;
-  }
-
-  let total_requests = sub_reports.len();
-  let successful_requests = group_by_status.entry(2).or_insert_with(Vec::new).len();
-  let failed_requests = total_requests - successful_requests;
-
-  DrillStats {
-    total_requests,
-    successful_requests,
-    failed_requests,
-    status_counts,
-    hist,
-  }
-}
-
-/// Prints the per-status-code breakdown for a stats bucket, followed by a
-/// class rollup that buckets codes by family (`2xx`/`3xx`/`4xx`/`5xx`) -- so a
-/// run returning a mix of e.g. 200/201/204 sums them into a single `2xx`
-/// total. The synthetic status 520 is labelled as a connection error and kept
-/// out of the `5xx` bucket, reported as a separate `conn` total instead.
-///
-/// With `name = None` (the global summary) it prints the per-code lines plus
-/// the rollup. With `name = Some(step)` (a per-step summary, shown only under
-/// `--verbose`) it prints a single compact `code:count` line under the step's
-/// named columns to keep the per-step output tight.
-fn show_status_codes(stats: &DrillStats, name: Option<&str>) {
-  if stats.status_counts.is_empty() {
-    return;
-  }
-
-  if let Some(name) = name {
-    let codes = stats.status_counts.iter().map(|(code, count)| format!("{code}:{count}")).collect::<Vec<_>>().join(" ");
-    println!("{:width$} {:width2$} {}", name.green(), "Status codes".yellow(), codes.cyan(), width = 25, width2 = 25);
-    return;
-  }
-
-  println!("{}", "Status codes".yellow());
-  for (code, count) in &stats.status_counts {
-    let label = if *code == 520 {
-      format!("{code} (connection error)")
-    } else {
-      code.to_string()
-    };
-    println!("  {:width$} {}", label.cyan(), count.to_string().cyan(), width = 23);
-  }
-
-  println!("  {}", status_class_rollup(&stats.status_counts).join(" · ").dimmed());
-}
-
-/// Builds the class-rollup parts for the status-code summary line: each HTTP
-/// family (`2xx`/`3xx`/`4xx`/`5xx`) summed across all its codes (so 200, 201,
-/// 204 fold into one `2xx` total), in ascending family order. The synthetic
-/// status 520 is kept out of the `5xx` bucket and appended as a separate `conn`
-/// total so dropped connections stay distinct from server errors.
-fn status_class_rollup(status_counts: &BTreeMap<u16, usize>) -> Vec<String> {
-  let mut class_counts: BTreeMap<u16, usize> = BTreeMap::new();
-  let mut connection_errors = 0;
-  for (code, count) in status_counts {
-    if *code == 520 {
-      connection_errors += count;
-    } else {
-      *class_counts.entry(code / 100).or_insert(0) += count;
-    }
-  }
-  let mut parts: Vec<String> = class_counts.iter().map(|(class, count)| format!("{class}xx {count}")).collect();
-  if connection_errors > 0 {
-    parts.push(format!("conn {connection_errors}"));
-  }
-  parts
-}
-
-fn format_time(tdiff: f64, nanosec: bool) -> String {
-  if nanosec {
-    (1_000_000.0 * tdiff).round().to_string() + "ns"
-  } else {
-    tdiff.round().to_string() + "ms"
-  }
-}
-
-fn show_stats(list_reports: &[Vec<Report>], stats_option: bool, nanosec: bool, verbose: bool, duration: f64) {
-  if !stats_option {
-    return;
-  }
-
-  let mut group_by_name = LinkedHashMap::new();
-
-  for req in list_reports.concat() {
-    group_by_name.entry(req.name.clone()).or_insert_with(Vec::new).push(req);
-  }
-
-  // compute stats per name
-  for (name, reports) in group_by_name {
-    let substats = compute_stats(&reports);
-    println!();
-    println!("{:width$} {:width2$} {}", name.green(), "Total requests".yellow(), substats.total_requests.to_string().cyan(), width = 25, width2 = 25);
-    println!("{:width$} {:width2$} {}", name.green(), "Successful requests".yellow(), substats.successful_requests.to_string().cyan(), width = 25, width2 = 25);
-    println!("{:width$} {:width2$} {}", name.green(), "Failed requests".yellow(), substats.failed_requests.to_string().cyan(), width = 25, width2 = 25);
-    if verbose {
-      show_status_codes(&substats, Some(&name));
-    }
-    println!("{:width$} {:width2$} {}", name.green(), "Median time per request".yellow(), format_time(substats.median_duration(), nanosec).cyan(), width = 25, width2 = 25);
-    println!("{:width$} {:width2$} {}", name.green(), "Average time per request".yellow(), format_time(substats.mean_duration(), nanosec).cyan(), width = 25, width2 = 25);
-    println!("{:width$} {:width2$} {}", name.green(), "Sample standard deviation".yellow(), format_time(substats.stdev_duration(), nanosec).cyan(), width = 25, width2 = 25);
-    println!("{:width$} {:width2$} {}", name.green(), "99.0'th percentile".yellow(), format_time(substats.value_at_quantile(0.99), nanosec).cyan(), width = 25, width2 = 25);
-    println!("{:width$} {:width2$} {}", name.green(), "99.5'th percentile".yellow(), format_time(substats.value_at_quantile(0.995), nanosec).cyan(), width = 25, width2 = 25);
-    println!("{:width$} {:width2$} {}", name.green(), "99.9'th percentile".yellow(), format_time(substats.value_at_quantile(0.999), nanosec).cyan(), width = 25, width2 = 25);
-  }
-
-  // compute global stats
-  let allreports = list_reports.concat();
-  let global_stats = compute_stats(&allreports);
-  // Guard the divide so a zero-duration or empty run reports 0.00 rather than NaN.
-  let requests_per_second = if duration > 0.0 {
-    global_stats.total_requests as f64 / duration
-  } else {
-    0.0
-  };
-
-  println!();
-  println!("{:width2$} {} {}", "Time taken for tests".yellow(), format!("{duration:.1}").cyan(), "seconds".cyan(), width2 = 25);
-  println!("{:width2$} {}", "Total requests".yellow(), global_stats.total_requests.to_string().cyan(), width2 = 25);
-  println!("{:width2$} {}", "Successful requests".yellow(), global_stats.successful_requests.to_string().cyan(), width2 = 25);
-  println!("{:width2$} {}", "Failed requests".yellow(), global_stats.failed_requests.to_string().cyan(), width2 = 25);
-  show_status_codes(&global_stats, None);
-  println!("{:width2$} {} {}", "Requests per second".yellow(), format!("{requests_per_second:.2}").cyan(), "[#/sec]".cyan(), width2 = 25);
-  println!("{:width2$} {}", "Median time per request".yellow(), format_time(global_stats.median_duration(), nanosec).cyan(), width2 = 25);
-  println!("{:width2$} {}", "Average time per request".yellow(), format_time(global_stats.mean_duration(), nanosec).cyan(), width2 = 25);
-  println!("{:width2$} {}", "Sample standard deviation".yellow(), format_time(global_stats.stdev_duration(), nanosec).cyan(), width2 = 25);
-  println!("{:width2$} {}", "99.0'th percentile".yellow(), format_time(global_stats.value_at_quantile(0.99), nanosec).cyan(), width2 = 25);
-  println!("{:width2$} {}", "99.5'th percentile".yellow(), format_time(global_stats.value_at_quantile(0.995), nanosec).cyan(), width2 = 25);
-  println!("{:width2$} {}", "99.9'th percentile".yellow(), format_time(global_stats.value_at_quantile(0.999), nanosec).cyan(), width2 = 25);
 }
 
 fn compare_benchmark(list_reports: &[Vec<Report>], compare_path_option: Option<&str>, threshold_option: Option<f64>) {
@@ -596,75 +437,6 @@ fn compare_benchmark(list_reports: &[Vec<Report>], compare_path_option: Option<&
 #[cfg(test)]
 mod tests {
   use super::*;
-
-  fn report(name: &str, duration_ms: f64, status: u16) -> Report {
-    Report {
-      name: name.to_string(),
-      duration: duration_ms,
-      status,
-    }
-  }
-
-  // Regression: upstream #151, #174, #201, #216
-  // Durations above 3.6 s caused a panic because the histogram upper bound
-  // was 3_600_000 (microseconds) while the code records values in
-  // microseconds (duration_ms * 1000). A 5 s request = 5_000_000 us
-  // exceeded the bound.
-  #[test]
-  fn histogram_accepts_durations_above_5s() {
-    let reports = vec![
-      report("fast", 100.0, 200),
-      report("slow", 5_000.0, 200),       // 5 seconds
-      report("very_slow", 30_000.0, 200), // 30 seconds
-    ];
-    let stats = compute_stats(&reports);
-    assert_eq!(stats.total_requests, 3);
-    assert_eq!(stats.successful_requests, 3);
-    assert!(stats.mean_duration() > 1_000.0, "mean should reflect long durations");
-  }
-
-  #[test]
-  fn histogram_accepts_duration_near_one_hour() {
-    let reports = vec![
-      report("marathon", 3_500_000.0, 200), // ~58 minutes
-    ];
-    let stats = compute_stats(&reports);
-    assert_eq!(stats.total_requests, 1);
-  }
-
-  #[test]
-  fn stats_counts_failures() {
-    let reports = vec![report("ok", 50.0, 200), report("redirect", 60.0, 301), report("err", 70.0, 500)];
-    let stats = compute_stats(&reports);
-    assert_eq!(stats.total_requests, 3);
-    assert_eq!(stats.successful_requests, 1);
-    assert_eq!(stats.failed_requests, 2);
-  }
-
-  #[test]
-  fn stats_records_status_breakdown() {
-    let reports = vec![
-      report("a", 10.0, 200),
-      report("b", 11.0, 200),
-      report("c", 12.0, 404),
-      report("d", 13.0, 500),
-      report("e", 14.0, 520), // connection error
-    ];
-    let stats = compute_stats(&reports);
-    assert_eq!(stats.status_counts.get(&200), Some(&2));
-    assert_eq!(stats.status_counts.get(&404), Some(&1));
-    assert_eq!(stats.status_counts.get(&500), Some(&1));
-    assert_eq!(stats.status_counts.get(&520), Some(&1));
-    // every request is accounted for exactly once
-    assert_eq!(stats.status_counts.values().sum::<usize>(), stats.total_requests);
-  }
-
-  #[test]
-  fn class_rollup_buckets_codes_and_splits_connection_errors() {
-    let counts: BTreeMap<u16, usize> = [(200, 5), (201, 2), (204, 1), (404, 3), (500, 1), (520, 4)].into_iter().collect();
-    // 200+201+204 -> 2xx 8; 404 -> 4xx 3; 500 -> 5xx 1; 520 -> conn 4 (not 5xx).
-    assert_eq!(status_class_rollup(&counts), vec!["2xx 8", "4xx 3", "5xx 1", "conn 4"]);
-  }
 
   #[test]
   fn parse_duration_seconds() {
@@ -747,6 +519,19 @@ mod tests {
     let cli = Cli::try_parse_from(["driller", "run", "http://example.com", "--stats", "--quiet"]).unwrap();
     assert!(cli.stats);
     assert!(cli.quiet);
+  }
+
+  #[test]
+  fn cli_stats_format_defaults_to_text() {
+    // Without --stats-format, existing behaviour is unchanged: text.
+    let cli = Cli::try_parse_from(["driller", "run", "http://example.com"]).unwrap();
+    assert_eq!(cli.stats_format, StatsFormat::Text);
+  }
+
+  #[test]
+  fn cli_stats_format_json_parses() {
+    let cli = Cli::try_parse_from(["driller", "run", "http://example.com", "--stats-format", "json"]).unwrap();
+    assert_eq!(cli.stats_format, StatsFormat::Json);
   }
 
   #[test]

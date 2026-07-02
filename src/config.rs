@@ -182,6 +182,7 @@ mod tests {
       nanosec: false,
       timeout: 10,
       verbose: false,
+      machine_readable: false,
       tags: crate::tags::Tags::new(None, None),
     }
   }
