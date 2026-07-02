@@ -513,4 +513,50 @@ mod tests {
     assert!(parsed.is_object());
     assert_eq!(parsed["global"]["total_requests"], 1);
   }
+
+  #[test]
+  fn json_latency_values_are_in_milliseconds() {
+    // Every request took 250 ms. The JSON latency figures must come back in
+    // milliseconds (~250), pinning the unit: a microsecond/nanosecond mix-up
+    // or a double-divide (which a shape-only `is_number` check cannot catch)
+    // would land far outside this band (250_000 or 0.25).
+    let reports = vec![vec![report("fetch", 250.0, 200), report("fetch", 250.0, 200), report("fetch", 250.0, 200)]];
+    let json = serde_json::to_value(build_stats_view(&reports, 1.0)).unwrap();
+
+    // Pin the wire schema version to the literal so an accidental bump is caught.
+    assert_eq!(json["schema"], 1);
+
+    let latency = &json["global"]["latency_ms"];
+    for key in ["mean", "median", "p99", "p995", "p999"] {
+      let v = latency[key].as_f64().unwrap_or_else(|| panic!("latency_ms.{key} should be a number"));
+      assert!((240.0..=260.0).contains(&v), "latency_ms.{key} should be ~250 ms, got {v}");
+    }
+    // Identical durations => negligible spread.
+    let stdev = latency["stdev"].as_f64().unwrap();
+    assert!(stdev < 5.0, "stdev of identical durations should be ~0 ms, got {stdev}");
+  }
+
+  #[test]
+  fn json_empty_run_serializes_valid_zeros() {
+    // A run that recorded nothing (zero requests, zero duration) must still
+    // produce a well-formed document with zeroed numbers -- no NaN, no panic,
+    // no divide-by-zero -- so `... --stats-format json | jq` never chokes on a
+    // degenerate run.
+    let rendered = serde_json::to_string(&build_stats_view(&[], 0.0)).expect("empty run must serialize");
+    let json: serde_json::Value = serde_json::from_str(&rendered).unwrap();
+
+    assert_eq!(json["schema"], 1);
+    assert_eq!(json["duration_s"], 0.0);
+    assert_eq!(json["requests_per_second"], 0.0);
+    assert_eq!(json["global"]["total_requests"], 0);
+    assert_eq!(json["global"]["successful_requests"], 0);
+    assert_eq!(json["global"]["failed_requests"], 0);
+    assert!(json["steps"].as_array().unwrap().is_empty());
+    // Latency figures are finite zeros, never NaN (serde_json renders a NaN as
+    // `null`, which `as_f64` would reject -- so this also guards against NaN).
+    for key in ["mean", "median", "stdev", "p99", "p995", "p999"] {
+      let v = json["global"]["latency_ms"][key].as_f64().unwrap_or_else(|| panic!("latency_ms.{key} should be a finite number, not null/NaN"));
+      assert_eq!(v, 0.0, "latency_ms.{key} should be 0 for an empty run, got {v}");
+    }
+  }
 }
