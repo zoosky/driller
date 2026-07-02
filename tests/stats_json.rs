@@ -79,9 +79,15 @@ fn json_run_ignores_nanosec_flag() {
 
   let parsed: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap_or_else(|e| panic!("stdout should be JSON even with --nanosec, parse error: {e}. stdout={stdout}"));
 
-  // A localhost request is a few milliseconds at most; if `--nanosec` leaked
-  // into the JSON the values would be ~1e6x larger and blow past this generous
-  // millisecond ceiling.
-  let mean = parsed["global"]["latency_ms"]["mean"].as_f64().expect("latency_ms.mean should be a number");
-  assert!((0.0..60_000.0).contains(&mean), "latency_ms.mean should be milliseconds, got {mean}");
+  // `--nanosec` only switches the text display to nanoseconds; if it leaked into
+  // the JSON every latency figure would be ~1e6x larger. A handful of localhost
+  // requests finish in well under a second, so a 5000 ms ceiling clears real
+  // millisecond values by a wide margin while a nanosecond leak (hundreds of
+  // thousands and up) blows straight past it. Check every latency field, not
+  // just the mean, so a leak confined to one accessor cannot slip through.
+  let latency = &parsed["global"]["latency_ms"];
+  for key in ["mean", "median", "stdev", "p99", "p995", "p999"] {
+    let v = latency[key].as_f64().unwrap_or_else(|| panic!("latency_ms.{key} should be a number"));
+    assert!((0.0..5_000.0).contains(&v), "latency_ms.{key} should be millisecond-scale, not nanoseconds; got {v}");
+  }
 }
