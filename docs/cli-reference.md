@@ -12,9 +12,12 @@ Usage: driller run [OPTIONS] [URL]
 |---|---|
 | `[URL]` | Target URL for ad-hoc testing (creates a synthetic GET request). Pass `-` to read the URL from standard input. |
 
-`driller run -` reads the target URL from the first non-empty line of stdin, so a
-single-endpoint test drops into a shell pipeline. Empty input prints the standard
-`error: either a URL or --benchmark is required`.
+`driller run -` reads the target URL from the first non-empty line of stdin
+(trimmed of surrounding whitespace and a leading UTF-8 BOM), so a single-endpoint
+test drops into a shell pipeline. Because `-` is an ad-hoc source it cannot be
+combined with `--benchmark`. Empty stdin prints the standard `error: either a URL
+or --benchmark is required`; unreadable or non-UTF-8 stdin exits with `error:
+couldn't read URL from stdin: ...`.
 
 ### Run-specific options
 

@@ -190,20 +190,25 @@ fn parse_duration(s: &str) -> Duration {
 /// Reads an ad-hoc target URL from `reader`, used when the positional URL is the
 /// standard stdin sentinel `-`.
 ///
-/// Returns the first non-empty, whitespace-trimmed line, so
-/// `echo http://host/path | driller run -` runs the same synthetic-GET test as
-/// `driller run http://host/path`. Empty or whitespace-only input (and a read
-/// error) yields `None`, letting the caller fall through to the usual "a URL or
-/// --benchmark is required" message rather than starting an empty run.
-fn read_url_from_reader(reader: impl BufRead) -> Option<String> {
+/// Returns the first non-empty line, trimmed of surrounding whitespace and a
+/// leading UTF-8 byte-order mark, so `echo http://host/path | driller run -`
+/// runs the same synthetic-GET test as `driller run http://host/path`.
+///
+/// Whitespace-only or empty input yields `Ok(None)`, letting the caller fall
+/// through to the usual "a URL or --benchmark is required" message. A read or
+/// non-UTF-8 decode failure is returned as `Err` so the caller can report the
+/// real cause instead of a misleading missing-URL error.
+fn read_url_from_reader(reader: impl BufRead) -> std::io::Result<Option<String>> {
   for line in reader.lines() {
-    let line = line.ok()?;
-    let trimmed = line.trim();
+    let line = line?;
+    // `str::trim` does not strip a UTF-8 BOM (U+FEFF is not whitespace); left in
+    // place it would survive into a malformed base URL that never connects.
+    let trimmed = line.trim().trim_start_matches('\u{feff}').trim();
     if !trimmed.is_empty() {
-      return Some(trimmed.to_string());
+      return Ok(Some(trimmed.to_string()));
     }
   }
-  None
+  Ok(None)
 }
 
 /// Splits a URL into its base (scheme + authority) and path components.
@@ -265,8 +270,24 @@ fn main() {
     Some(Commands::Run(ref run_args)) => {
       // `-` reads the ad-hoc target URL from stdin, so a single-endpoint test
       // composes in a pipeline: `echo http://host/path | driller run - --stats`.
+      // It is an ad-hoc source, so reject it up front when a benchmark file is
+      // also given -- otherwise the read would block on a plan-only run that
+      // never needs a URL, and a piped host would silently override the plan's
+      // own base.
       let resolved_url = match run_args.url.as_deref() {
-        Some("-") => read_url_from_reader(std::io::stdin().lock()),
+        Some("-") => {
+          if cli.benchmark.is_some() {
+            eprintln!("error: `run -` reads an ad-hoc target URL from stdin and cannot be combined with --benchmark");
+            process::exit(1);
+          }
+          match read_url_from_reader(std::io::stdin().lock()) {
+            Ok(url) => url,
+            Err(e) => {
+              eprintln!("error: couldn't read URL from stdin: {e}");
+              process::exit(1);
+            }
+          }
+        }
         other => other.map(str::to_string),
       };
 
@@ -793,19 +814,33 @@ mod tests {
   #[test]
   fn read_url_from_reader_returns_trimmed_url() {
     let input = std::io::Cursor::new("  http://example.com/health  \n".as_bytes());
-    assert_eq!(read_url_from_reader(input), Some("http://example.com/health".to_string()));
+    assert_eq!(read_url_from_reader(input).unwrap(), Some("http://example.com/health".to_string()));
   }
 
   #[test]
   fn read_url_from_reader_skips_leading_blank_lines() {
     let input = std::io::Cursor::new("\n   \nhttp://example.com\nhttp://ignored\n".as_bytes());
-    assert_eq!(read_url_from_reader(input), Some("http://example.com".to_string()));
+    assert_eq!(read_url_from_reader(input).unwrap(), Some("http://example.com".to_string()));
   }
 
   #[test]
   fn read_url_from_reader_empty_input_is_none() {
     let input = std::io::Cursor::new("   \n\n".as_bytes());
-    assert_eq!(read_url_from_reader(input), None);
+    assert_eq!(read_url_from_reader(input).unwrap(), None);
+  }
+
+  #[test]
+  fn read_url_from_reader_strips_leading_bom() {
+    // A URL piped from a UTF-8-with-BOM file must not carry the BOM into the URL.
+    let input = std::io::Cursor::new("\u{feff}http://example.com/health\n".as_bytes());
+    assert_eq!(read_url_from_reader(input).unwrap(), Some("http://example.com/health".to_string()));
+  }
+
+  #[test]
+  fn read_url_from_reader_non_utf8_is_err() {
+    // Invalid UTF-8 on stdin must surface as a read error, not a missing URL.
+    let input = std::io::Cursor::new([0xff, 0xff, b'\n'].as_slice());
+    assert!(read_url_from_reader(input).is_err());
   }
 
   #[test]

@@ -11,9 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `driller run -` reads the ad-hoc target URL from standard input, so a
   single-endpoint load test composes in a shell pipeline -- for example
   `echo http://localhost:9000/health | driller run - --duration 10s --stats`.
-  The URL is the first non-empty line of stdin and runs through the same
-  synthetic-GET path as `driller run <URL>`; empty input still prints the
-  standard `error: either a URL or --benchmark is required` and exits `1`.
+  The URL is the first non-empty line of stdin (trimmed of surrounding
+  whitespace and a leading UTF-8 BOM) and runs through the same synthetic-GET
+  path as `driller run <URL>`. Because `-` is an ad-hoc source it cannot be
+  combined with `--benchmark` (that pairing exits `1` with a clear message);
+  empty stdin prints the standard `error: either a URL or --benchmark is
+  required`; and unreadable or non-UTF-8 stdin exits `1` with `error: couldn't
+  read URL from stdin: ...` rather than a misleading missing-URL message.
 
 ## [0.12.0] - 2026-07-01
 
