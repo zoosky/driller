@@ -11,14 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--stats-format <text|json>` selects the statistics output format (default
   `text`, unchanged). `--stats-format json` emits the same global and per-step
   statistics as a single JSON document to stdout -- and nothing else on stdout:
-  the run banner, per-request progress, and warnings go to stderr, so
+  the run banner and any warnings are routed to stderr and per-request progress
+  is suppressed (as with `--quiet`), so
   `driller run ... --stats-format json | jq .` always sees valid JSON. It
   implies `--stats`. The document carries a top-level integer `schema` version;
   each bucket reports totals, a `status_counts` map (exact code to count,
   including the synthetic `520`), a `class_rollup` (`2xx`/`3xx`/`4xx`/`5xx` plus
   a separate `connection_errors` for `520`), and `latency_ms` percentiles as raw
-  milliseconds (`--nanosec` does not affect the JSON). `--report` / `--compare`
-  are unaffected.
+  milliseconds (`--nanosec` does not affect the JSON). `--report` is unaffected;
+  `--stats-format json` cannot be combined with `--compare` (both write to
+  stdout), the same restriction `--stats` already has.
 - `driller run -` reads the ad-hoc target URL from standard input, so a
   single-endpoint load test composes in a shell pipeline -- for example
   `echo http://localhost:9000/health | driller run - --duration 10s --stats`.

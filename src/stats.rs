@@ -128,8 +128,10 @@ struct LatencyView {
 /// Requests bucketed by HTTP family, machine-readable form of the text rollup.
 ///
 /// Each present family (`2xx`/`3xx`/`4xx`/`5xx`) is a key with count > 0;
-/// `connection_errors` (the synthetic status 520) is always present and kept
-/// out of `5xx`, mirroring the text summary's `conn` total.
+/// `connection_errors` (the synthetic status 520) is kept out of `5xx` and
+/// carries the same count as the text summary's `conn` total. Unlike the text
+/// form -- which omits `conn` when zero -- it is always serialized, so the JSON
+/// schema stays stable.
 #[derive(Serialize)]
 struct ClassRollup {
   #[serde(flatten)]

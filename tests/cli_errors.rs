@@ -35,3 +35,18 @@ fn missing_benchmark_file_exits_cleanly() {
   let missing = "/tmp/driller-integration-test-missing-benchmark.yml";
   assert_clean_missing_file(&["--benchmark", missing], missing);
 }
+
+#[test]
+fn stats_format_json_with_compare_is_rejected() {
+  // JSON mode reserves stdout for the lone stats document, but --compare
+  // writes its verdict there too. The two are mutually exclusive and the
+  // clash is rejected up front (before any run work) with a clean error
+  // and exit code 1 -- no network socket is opened.
+  let output = Command::new(driller_bin()).args(["run", "http://example.com", "--stats-format", "json", "--compare", "/tmp/driller-integration-test-missing-baseline.yml"]).output().expect("failed to invoke driller binary");
+
+  let stderr = String::from_utf8_lossy(&output.stderr);
+
+  assert_eq!(output.status.code(), Some(1), "expected exit code 1, got {:?}. stderr={stderr}", output.status.code());
+  assert!(stderr.contains("--stats-format json cannot be combined with --compare"), "stderr should explain the json/compare conflict, got: {stderr}");
+  assert!(!stderr.contains("panicked"), "stderr should not mention 'panicked' (regression), got: {stderr}");
+}

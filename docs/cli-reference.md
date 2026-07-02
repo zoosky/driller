@@ -106,8 +106,12 @@ can act on the numbers with `jq` rather than scraping ANSI-decorated text. It
 implies `--stats` (you need not pass both).
 
 The contract is that **stdout carries only the JSON document**: the run banner
-(`Concurrency`, `Base URL`, ...), per-request progress, and any warnings go to
-stderr, so `driller run ... --stats-format json | jq .` always sees valid JSON.
+(`Concurrency`, `Base URL`, ...) and any warnings are routed to stderr, and
+per-request progress is suppressed (as with `--quiet`), so
+`driller run ... --stats-format json | jq .` always sees valid JSON.
+
+Because `--compare` also writes its verdict to stdout, it cannot be combined
+with `--stats-format json` -- the same restriction `--stats` carries.
 
 ```json
 {

@@ -275,6 +275,15 @@ fn main() {
   // carries the same information machine-readably.
   let json_mode = cli.stats_format == StatsFormat::Json;
 
+  // `--compare` writes its perf verdict to stdout, which would corrupt the lone
+  // JSON stats document, so the two are mutually exclusive -- mirroring the
+  // `conflicts_with = "compare"` that `--stats` already carries (JSON mode
+  // implies `--stats`). Rejected up front, before any run work.
+  if json_mode && cli.compare.is_some() {
+    eprintln!("error: --stats-format json cannot be combined with --compare (both write to stdout)");
+    process::exit(1);
+  }
+
   let options = match cli.command {
     Some(Commands::Run(ref run_args)) => {
       // `-` reads the ad-hoc target URL from stdin, so a single-endpoint test
