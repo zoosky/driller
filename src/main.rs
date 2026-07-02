@@ -7,7 +7,7 @@ use hdrhistogram::Histogram;
 use linked_hash_map::LinkedHashMap;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::io::BufRead;
+use std::io::{BufRead, IsTerminal};
 use std::process;
 use std::time::Duration;
 
@@ -280,7 +280,13 @@ fn main() {
             eprintln!("error: `run -` reads an ad-hoc target URL from stdin and cannot be combined with --benchmark");
             process::exit(1);
           }
-          match read_url_from_reader(std::io::stdin().lock()) {
+          let stdin = std::io::stdin();
+          // On an interactive terminal the blocking read would otherwise look
+          // frozen; a hint tells the user it is waiting for a URL.
+          if stdin.is_terminal() {
+            eprintln!("reading target URL from stdin (type one and press Ctrl-D, or pipe it in)...");
+          }
+          match read_url_from_reader(stdin.lock()) {
             Ok(url) => url,
             Err(e) => {
               eprintln!("error: couldn't read URL from stdin: {e}");
