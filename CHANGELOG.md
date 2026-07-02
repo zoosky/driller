@@ -19,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   required`; and unreadable or non-UTF-8 stdin exits `1` with `error: couldn't
   read URL from stdin: ...` rather than a misleading missing-URL message.
 
+### Changed
+- The ad-hoc runner now rejects a target URL without a scheme (for example
+  `example.com`) up front with `error: URL must include a scheme, e.g.
+  http://example.com` and exit `1`, instead of building a malformed base URL
+  that fails every request. Applies to a positional `driller run <URL>`, a URL
+  piped via `driller run -`, and a `--base-url` override; driller drives
+  HTTP(S) only.
+
 ## [0.12.0] - 2026-07-01
 
 ### Added

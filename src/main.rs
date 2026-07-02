@@ -311,6 +311,18 @@ fn main() {
         process::exit(1);
       }
 
+      // driller drives HTTP(S) only: an effective base URL without a scheme --
+      // an ad-hoc URL (positional or piped), or a --base-url override -- would
+      // build a malformed base that fails every request, so reject it up front
+      // with a clear message. A benchmark file supplies its own base and is
+      // unaffected (base_url is None there).
+      if let Some(base) = base_url.as_deref()
+        && !base.contains("://")
+      {
+        eprintln!("error: URL must include a scheme, e.g. http://{base}");
+        process::exit(1);
+      }
+
       RunOptions {
         benchmark_path: cli.benchmark.clone(),
         report_path: cli.report.clone(),

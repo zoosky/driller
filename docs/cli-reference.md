@@ -10,7 +10,7 @@ Usage: driller run [OPTIONS] [URL]
 
 | Argument | Description |
 |---|---|
-| `[URL]` | Target URL for ad-hoc testing (creates a synthetic GET request). Pass `-` to read the URL from standard input. |
+| `[URL]` | Target URL for ad-hoc testing (creates a synthetic GET request). Must include a scheme (`http://` or `https://`). Pass `-` to read the URL from standard input. |
 
 `driller run -` reads the target URL from the first non-empty line of stdin
 (trimmed of surrounding whitespace and a leading UTF-8 BOM), so a single-endpoint

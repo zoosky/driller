@@ -69,3 +69,22 @@ fn run_dash_invalid_utf8_stdin_errors_clearly() {
   assert_eq!(output.status.code(), Some(1), "expected exit code 1, stderr={stderr}");
   assert!(stderr.contains("couldn't read URL from stdin"), "should surface the stdin read error, got: {stderr}");
 }
+
+/// A scheme-less URL piped on stdin is rejected up front rather than building a
+/// base URL that never connects.
+#[test]
+fn run_dash_scheme_less_url_is_rejected() {
+  let output = run_with_stdin(&["run", "-"], b"example.com/health\n");
+  let stderr = String::from_utf8_lossy(&output.stderr);
+  assert_eq!(output.status.code(), Some(1), "expected exit code 1, stderr={stderr}");
+  assert!(stderr.contains("must include a scheme"), "should reject a scheme-less URL, got: {stderr}");
+}
+
+/// The same scheme requirement applies to a positional ad-hoc URL.
+#[test]
+fn run_positional_scheme_less_url_is_rejected() {
+  let output = Command::new(driller_bin()).args(["run", "example.com"]).output().expect("failed to invoke driller binary");
+  let stderr = String::from_utf8_lossy(&output.stderr);
+  assert_eq!(output.status.code(), Some(1), "expected exit code 1, stderr={stderr}");
+  assert!(stderr.contains("must include a scheme"), "should reject a scheme-less URL, got: {stderr}");
+}
