@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- A failed request now prints a concise, classified line instead of a raw
+  `reqwest::Error` `Debug` dump. The line names the step, URL, and method,
+  followed by a red `ERR <cause>` marker aligned with the success line -- for
+  example `ERR connection timed out`, `ERR connection refused`,
+  `ERR DNS resolution failed`, or `ERR TLS error`. The cause is classified from
+  reqwest's own predicates plus a walk of the error's `source()` chain (no new
+  dependency). Under `--verbose` the full underlying `source()` chain is appended
+  on a dimmed `cause:` line, so the detail from the old dump is still available
+  on demand. The suppression gate (`--quiet`), the synthetic `520` recorded for
+  `--stats`, and the status-code breakdown are all unchanged.
 - Internal: the library error type (`driller::Error`) now derives its
   `Display`/`Error` implementations with `thiserror` instead of hand-written
   `impl` blocks. User-facing messages and the `source()` chain are byte-for-byte

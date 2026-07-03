@@ -78,6 +78,46 @@ form:
 | `--stats-format <text\|json>` | | Statistics output format (default: `text`) |
 | `--verbose` | `-v` | Toggle verbose output |
 
+### Per-request output
+
+Unless `--quiet` is set, driller prints one aligned line per request. A
+successful request shows the step name, URL, HTTP status, and elapsed time:
+
+```
+Fetch users               http://localhost:3000/users 200 1ms
+```
+
+A request that never produced a usable response (a connection or body-read
+failure) prints a matching line ending in a red `ERR <cause>` marker instead of
+a status, where `<cause>` is a plain-language classification rather than a raw
+error dump:
+
+```
+Fetch users               http://localhost:3000/users GET ERR connection timed out 3000ms
+```
+
+The classified causes are:
+
+| Cause | Meaning |
+|---|---|
+| `connection timed out` | The request exceeded `--timeout`. |
+| `connection refused` | Nothing was listening on the target host/port. |
+| `DNS resolution failed` | The host name could not be resolved. |
+| `could not connect` | The connection could not be established (other reason). |
+| `TLS error` | The TLS handshake or certificate check failed. |
+| `too many redirects` | The client stopped after too many redirects. |
+| `response body error` | The response body could not be read or decoded. |
+| `request failed` | Generic fallback for an unclassified failure. |
+
+Every failure is still counted as the synthetic status `520` in `--stats` (see
+below). With `--verbose`, the underlying error's full `source()` chain is
+appended on a dimmed `cause:` line for debugging:
+
+```
+Fetch users               http://localhost:3000/users GET ERR connection refused 1ms
+  cause: error sending request for url (...): client error (Connect): tcp connect error: Connection refused (os error 61)
+```
+
 ### Statistics output (`--stats`)
 
 `--stats` prints totals, latency percentiles, and a **status-code breakdown**:
