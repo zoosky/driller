@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Internal: the library error type (`driller::Error`) now derives its
+  `Display`/`Error` implementations with `thiserror` instead of hand-written
+  `impl` blocks. User-facing messages and the `source()` chain are byte-for-byte
+  unchanged, and the public error API is identical (non-breaking). `thiserror`
+  was already present transitively (via `reqwest`'s hickory-dns feature), so
+  this adds no new crate to the build.
+
 ## [0.13.0] - 2026-07-03
 
 ### Added

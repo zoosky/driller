@@ -47,6 +47,7 @@ rand = "0.10"
 hdrhistogram = "7.4.0"
 hex = "0.4.3"
 encoding_rs = "0.8"
+thiserror = "2"
 
 [dev-dependencies]
 tempfile = "3.8"
