@@ -130,8 +130,10 @@ mod tests {
     assert!(err.source().is_some());
 
     let csv_err = {
-      let mut rdr = csv::ReaderBuilder::new().from_reader("a,b\n1,2,3\n".as_bytes());
-      rdr.records().next().expect("a record").unwrap_err()
+      // Mirror the real call site (`rdr.headers()` in the reader): a header row
+      // with invalid UTF-8 fails while the reader parses the header itself.
+      let mut rdr = csv::ReaderBuilder::new().from_reader(&b"a,\xff\n1,2\n"[..]);
+      rdr.headers().expect_err("invalid utf-8 header must fail")
     };
     let csv_display = csv_err.to_string();
     let err = Error::Csv {
