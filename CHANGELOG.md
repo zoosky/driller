@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-07-03
+
 ### Added
 - `--stats-format <text|json>` selects the statistics output format (default
   `text`, unchanged). `--stats-format json` emits the same global and per-step
@@ -39,6 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that fails every request. Applies to a positional `driller run <URL>`, a URL
   piped via `driller run -`, and a `--base-url` override; driller drives
   HTTP(S) only.
+- **Library API (source-breaking):** `RunOptions` (re-exported from the crate
+  root) gains a public `machine_readable` field, so downstream code that
+  constructs it with a struct literal must set the new field. This is why
+  0.13.0 is a minor rather than a patch: the library surface is not
+  source-compatible with 0.12.x, even though every CLI flag and plan file is.
 
 ## [0.12.0] - 2026-07-01
 
@@ -284,7 +291,8 @@ See [FORK.md](./FORK.md) for rationale and migration instructions.
 - Benchmark YAML format and CLI flags are fully compatible with drill 0.9.0
 - Full upstream git history preserved
 
-[Unreleased]: https://github.com/zoosky/driller/compare/0.12.0...HEAD
+[Unreleased]: https://github.com/zoosky/driller/compare/0.13.0...HEAD
+[0.13.0]: https://github.com/zoosky/driller/compare/0.12.0...0.13.0
 [0.12.0]: https://github.com/zoosky/driller/compare/0.11.1...0.12.0
 [0.11.1]: https://github.com/zoosky/driller/compare/0.11.0...0.11.1
 [0.11.0]: https://github.com/zoosky/driller/compare/0.10.3...0.11.0
