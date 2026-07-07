@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - A failed request now prints a concise, classified line instead of a raw
-  `reqwest::Error` `Debug` dump. The line names the step, URL, and method,
-  followed by a red `ERR <cause>` marker aligned with the success line -- for
-  example `ERR connection timed out`, `ERR connection refused`,
+  `reqwest::Error` `Debug` dump. The line matches the success line format
+  (step name, URL, then a red `ERR <cause>` marker where the status would be) --
+  for example `ERR request timed out`, `ERR connection refused`,
   `ERR DNS resolution failed`, or `ERR TLS error`. The cause is classified from
   reqwest's own predicates plus a walk of the error's `source()` chain (no new
   dependency). Under `--verbose` the full underlying `source()` chain is appended

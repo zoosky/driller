@@ -93,14 +93,14 @@ a status, where `<cause>` is a plain-language classification rather than a raw
 error dump:
 
 ```
-Fetch users               http://localhost:3000/users GET ERR connection timed out 3000ms
+Fetch users               http://localhost:3000/users ERR request timed out 3000ms
 ```
 
 The classified causes are:
 
 | Cause | Meaning |
 |---|---|
-| `connection timed out` | The request exceeded `--timeout`. |
+| `request timed out` | The request exceeded `--timeout`. |
 | `connection refused` | Nothing was listening on the target host/port. |
 | `DNS resolution failed` | The host name could not be resolved. |
 | `could not connect` | The connection could not be established (other reason). |
@@ -114,7 +114,7 @@ below). With `--verbose`, the underlying error's full `source()` chain is
 appended on a dimmed `cause:` line for debugging:
 
 ```
-Fetch users               http://localhost:3000/users GET ERR connection refused 1ms
+Fetch users               http://localhost:3000/users ERR connection refused 1ms
   cause: error sending request for url (...): client error (Connect): tcp connect error: Connection refused (os error 61)
 ```
 

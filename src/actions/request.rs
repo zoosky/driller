@@ -211,11 +211,6 @@ impl Request {
       _ => panic!("Unknown method '{}'", self.method),
     };
 
-    // Canonical method label, captured before `method` is moved into the request
-    // builder so a failure line (which has no response status to show) can still
-    // name the verb that was attempted.
-    let method_label = method.as_str().to_string();
-
     // Clone Client out of the Pool lock so RequestBuilder construction does not run under the Mutex.
     let client = {
       let mut pool2 = pool.lock().unwrap();
@@ -262,7 +257,7 @@ impl Request {
       Err(e) => {
         let duration_ms = begin.elapsed().as_secs_f64() * 1000.0;
         if !config.quiet || config.verbose {
-          log_request_failure(&interpolated_name, interpolated_base_url.as_str(), &method_label, duration_ms, &e, config);
+          log_request_failure(&interpolated_name, interpolated_base_url.as_str(), duration_ms, &e, config);
         }
         return (None, duration_ms);
       }
@@ -300,7 +295,7 @@ impl Request {
 
     if let Err(e) = drain_result {
       if !config.quiet || config.verbose {
-        log_request_failure(&interpolated_name, interpolated_base_url.as_str(), &method_label, duration_ms, &e, config);
+        log_request_failure(&interpolated_name, interpolated_base_url.as_str(), duration_ms, &e, config);
       }
       return (None, duration_ms);
     }
@@ -412,7 +407,7 @@ impl ErrorFacts {
 /// `&'static str` free of Rust type names.
 fn classify_facts(facts: &ErrorFacts) -> &'static str {
   if facts.is_timeout {
-    return "connection timed out";
+    return "request timed out";
   }
   if facts.is_redirect {
     return "too many redirects";
@@ -439,7 +434,7 @@ fn classify_facts(facts: &ErrorFacts) -> &'static str {
 }
 
 /// Classifies a failed request's `reqwest::Error` into a short, human-readable
-/// cause -- e.g. `connection timed out`, `connection refused`,
+/// cause -- e.g. `request timed out`, `connection refused`,
 /// `DNS resolution failed`, `TLS error` -- for the per-step failure line, so a
 /// normal network outcome no longer surfaces as a raw `Debug` struct dump that
 /// reads like a panic. Anything unclassifiable falls back to `request failed`.
@@ -465,13 +460,14 @@ fn error_source_chain(e: &reqwest::Error) -> String {
 }
 
 /// Prints the classified, colored failure line for a request that produced no
-/// usable response, aligned with (and styled like) the success line in
-/// `send_request`. The `ERR <cause>` marker is red; under `--verbose` the full
-/// `source()` chain is appended on a dimmed `cause:` line so the debugging detail
-/// from the old raw dump is still available on demand. No purple hues.
-fn log_request_failure(name: &str, url: &str, method: &str, duration_ms: f64, error: &reqwest::Error, config: &Config) {
+/// usable response. The format matches the success line (`name | url | status |
+/// time`), substituting a red `ERR <cause>` marker for the HTTP status. Under
+/// `--verbose` the full `source()` chain is appended on a dimmed `cause:` line
+/// so the debugging detail from the old raw dump is still available on demand.
+/// No purple hues.
+fn log_request_failure(name: &str, url: &str, duration_ms: f64, error: &reqwest::Error, config: &Config) {
   let label = classify_connection_error(error);
-  println!("{:width$} {} {} {} {}", name.green(), url.blue().bold(), method, format!("ERR {label}").red(), Request::format_time(duration_ms, config.nanosec).cyan(), width = 25);
+  println!("{:width$} {} {} {}", name.green(), url.blue().bold(), format!("ERR {label}").red(), Request::format_time(duration_ms, config.nanosec).cyan(), width = 25);
   if config.verbose {
     println!("  {} {}", "cause:".dimmed(), error_source_chain(error));
   }
@@ -1114,8 +1110,8 @@ request:
     use std::io::ErrorKind;
 
     // Timeout wins over everything, including a refused io kind underneath it.
-    assert_eq!(classify_facts(&facts(true, true, false, false, Some(ErrorKind::ConnectionRefused), "connection refused")), "connection timed out");
-    assert_eq!(classify_facts(&facts(true, false, false, false, None, "")), "connection timed out");
+    assert_eq!(classify_facts(&facts(true, true, false, false, Some(ErrorKind::ConnectionRefused), "connection refused")), "request timed out");
+    assert_eq!(classify_facts(&facts(true, false, false, false, None, "")), "request timed out");
 
     // Redirect loop.
     assert_eq!(classify_facts(&facts(false, false, true, false, None, "")), "too many redirects");
