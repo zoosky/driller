@@ -25,6 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was already present transitively (via `reqwest`'s hickory-dns feature), so
   this adds no new crate to the build.
 
+### Security
+- Bump `h2` 0.4.14 -> 0.4.19 to clear RUSTSEC-2026-0258, in which the HTTP/2
+  implementation accepted and queued empty DATA frames without limit --
+  unbounded memory growth on a stream that is not drained, or a panic from an
+  integer overflow. Pulled in transitively via `reqwest`, and reachable on any
+  run whose target negotiates HTTP/2, so a hostile or malfunctioning target
+  server could exhaust the load generator. Lockfile-only change; no driller
+  source is affected.
+
 ## [0.13.0] - 2026-07-03
 
 ### Added
