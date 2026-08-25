@@ -41,10 +41,10 @@ impl<'a> Interpolator<'a> {
         }
 
         if strict {
-          panic!("Unknown '{}' variable!", &capture);
+          panic!("Unknown '{}' variable!", capture);
         }
 
-        eprintln!("{} Unknown '{}' variable!", "WARNING!".yellow().bold(), &capture);
+        eprintln!("{} Unknown '{}' variable!", "WARNING!".yellow().bold(), capture);
 
         "".to_string()
       })
