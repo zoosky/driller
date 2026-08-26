@@ -9,6 +9,7 @@
 #   - cargo clippy -- -D warnings          (Clippy workflow job)
 #   - cargo test                           (Test workflow job)
 #   - cargo audit                          (Security audit workflow job, if installed)
+#   - cargo deny --all-features check      (Cargo Deny workflow job, if installed)
 #   - example plans vs the example server  (Examples workflow job)
 #   - cargo tarpaulin --out Xml --ignore-tests  (Code coverage workflow job; opt-in only)
 #
@@ -18,6 +19,7 @@
 # Override knobs:
 #   JOBS              cargo --jobs N for the parallel builds (default: half the cores)
 #   SKIP_AUDIT=1      skip `cargo audit` even if installed
+#   SKIP_DENY=1       skip `cargo deny` even if installed
 #   SKIP_EXAMPLES=1   skip building + running the example server / example plans
 #   RUN_COVERAGE=1    additionally run `cargo tarpaulin` (slow; opt-in)
 #   SKIP_HEARTBEAT=1  silence the 30s "still running" progress line
@@ -139,6 +141,32 @@ run_audit() {
   cargo audit
 }
 
+# Mirror of the `deny` workflow job. `cargo deny check` runs four checks:
+# advisories, bans, licenses, and sources. The advisories half overlaps with
+# `cargo audit` above; the other three are what only this job catches --
+# notably deny.toml's ban on native-tls/openssl, which guards against the
+# OpenSSL TLS-init segfaults (upstream #168, #190) coming back through a
+# transitive dependency.
+#
+# `--all-features` mirrors the default arguments of EmbarkStudios/cargo-deny-action,
+# which runs `cargo-deny --all-features check`. driller declares no [features]
+# today, so it is a no-op -- kept so the two stay in step if that changes.
+#
+# It reads its own advisory database (CARGO_HOME/advisory-dbs) rather than the
+# one cargo-audit uses (CARGO_HOME/advisory-db), so running both concurrently
+# does not race on the checkout.
+run_deny() {
+  if [ "${SKIP_DENY:-0}" = "1" ]; then
+    echo "SKIP_DENY=1 — skipping cargo deny"
+    return 0
+  fi
+  if ! command -v cargo-deny >/dev/null 2>&1; then
+    echo "cargo-deny not installed (install with 'cargo install cargo-deny') — skipping"
+    return 0
+  fi
+  cargo deny --all-features check
+}
+
 run_coverage() {
   if ! command -v cargo-tarpaulin >/dev/null 2>&1; then
     echo "cargo-tarpaulin not installed (install with 'cargo install cargo-tarpaulin') — skipping"
@@ -221,6 +249,7 @@ start "fmt"      run_fmt
 start "clippy"   run_clippy
 start "test"     run_test
 start "audit"    run_audit
+start "deny"     run_deny
 start "examples" run_examples
 
 if [ "${SKIP_HEARTBEAT:-0}" != "1" ]; then
