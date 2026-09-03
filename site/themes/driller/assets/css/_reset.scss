@@ -1,0 +1,22 @@
+/// Universal reset.
+///
+/// The encre-css Preflight sets hardcoded text colors on many elements:
+///   h1-h6, strong, b, th: #111827  (near-black)
+///   body, p, li, td, blockquote:   #374151  (dark gray)
+///   pre:                           #e5e7eb  (light gray)
+/// These prevent CSS custom properties from controlling text color in dark
+/// mode. We reset them to `inherit` so all elements pick up the body color
+/// set via `var(--color-text)` in _layout.scss.
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+h1, h2, h3, h4, h5, h6,
+p, li, td, th, dt, dd,
+strong, b, em, i,
+blockquote, figcaption, label, legend {
+  color: inherit;
+}

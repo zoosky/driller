@@ -1,0 +1,130 @@
+/// Dark-first theme: :root vars are dark (see _variables.scss).
+/// This file provides light mode overrides via [data-theme="light"].
+
+// Explicit light mode via data-theme attribute (set by JS toggle)
+[data-theme="light"] {
+  --color-text: #171717;
+  --color-text-muted: #525252;
+  --color-text-faint: #737373;
+  --color-text-tag: #525252;
+  --color-link: #059669;
+  --color-bg: #FAFAFA;
+  --color-bg-subtle: #F5F5F5;
+  --color-bg-muted: #EFEFEF;
+  --color-bg-tag: #E5E5E5;
+  --color-bg-tag-hover: #D4D4D4;
+  --color-border: #E5E5E5;
+  --color-border-strong: #D4D4D4;
+  --color-nav-label: #A3A3A3;
+  --color-nav-pill-hover-bg: #E5E5E5;
+  --color-nav-pill-active-bg: rgba(5, 150, 105, 0.08);
+
+  // Alert light overrides
+  .alert-info {
+    border-left-color: #059669;
+    background: #ecfdf5;
+    color: #065f46;
+  }
+
+  .alert-warning {
+    border-left-color: #d97706;
+    background: #fffbeb;
+    color: #92400e;
+  }
+
+  .alert-success {
+    border-left-color: #059669;
+    background: #ecfdf5;
+    color: #065f46;
+  }
+
+  .alert-danger {
+    border-left-color: #dc2626;
+    background: #fef2f2;
+    color: #991b1b;
+  }
+
+  // Debug styles light overrides
+  .debug {
+    background: #fffbeb;
+    border-color: #fde68a;
+    color: #92400e;
+  }
+
+  .debug-panel {
+    border-color: #fde68a;
+    background: #fffdf7;
+
+    h3 {
+      color: #b45309;
+    }
+
+    pre {
+      background: #fff;
+      border-color: #E5E5E5;
+    }
+  }
+
+
+  // Button primary needs dark text on emerald bg
+  .btn-primary {
+    color: #fff;
+  }
+
+  // Search highlight in light mode
+  .acms-search-highlight {
+    background: rgba(5, 150, 105, 0.2);
+  }
+
+  // Search results shadow lighter
+  .acms-search-results {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  }
+
+  // Skip link contrast
+  .skip-link {
+    color: #fff;
+  }
+}
+
+// Automatic light mode for users without explicit preference who have a light
+// system preference. Since the theme defaults to dark, users with
+// prefers-color-scheme: light and no localStorage preference get the light
+// overrides.
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --color-text: #171717;
+    --color-text-muted: #525252;
+    --color-text-faint: #737373;
+    --color-text-tag: #525252;
+    --color-link: #059669;
+    --color-bg: #FAFAFA;
+    --color-bg-subtle: #F5F5F5;
+    --color-bg-muted: #EFEFEF;
+    --color-bg-tag: #E5E5E5;
+    --color-bg-tag-hover: #D4D4D4;
+    --color-border: #E5E5E5;
+    --color-border-strong: #D4D4D4;
+    --color-nav-label: #A3A3A3;
+    --color-nav-pill-hover-bg: #E5E5E5;
+    --color-nav-pill-active-bg: rgba(5, 150, 105, 0.08);
+  }
+
+  // Toggle icon: show moon when auto-detected light
+  :root:not([data-theme]) .theme-toggle-light {
+    display: inline;
+  }
+
+  :root:not([data-theme]) .theme-toggle-dark {
+    display: none;
+  }
+}
+
+// Light mode override: ensure toggle shows moon
+[data-theme="light"] .theme-toggle-light {
+  display: inline;
+}
+
+[data-theme="light"] .theme-toggle-dark {
+  display: none;
+}

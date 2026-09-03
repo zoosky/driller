@@ -1,0 +1,41 @@
+/// Error pages (404).
+
+.error-page {
+  text-align: center;
+  padding: 3rem 1rem;
+}
+
+.error-status {
+  font-family: var(--font-mono);
+  font-size: 4rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--color-link);
+  margin: 0 0 0.5rem;
+}
+
+.error-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 1rem;
+  color: var(--color-text);
+}
+
+.error-content,
+.error-home {
+  color: var(--color-text-muted);
+}
+
+.error-nav {
+  margin-top: 1.5rem;
+
+  a {
+    color: var(--color-link);
+    text-decoration: none;
+    margin: 0 0.5rem;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}

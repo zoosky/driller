@@ -7,6 +7,8 @@
 A clean HTTP load-test drill. Ansible-style YAML plans, Rust runtime,
 RPS and percentiles per run -- no fancy bits.
 
+Documentation: **[zoosky.github.io/driller](https://zoosky.github.io/driller)**
+
 ## Quick start
 
 ```bash

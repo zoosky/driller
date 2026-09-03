@@ -1,0 +1,4 @@
+{# Theme-specific alert shortcode that overrides the built-in (Feature f074). #}
+{# Usage: [alert warning]Watch out![/alert] #}
+{% set variant = args.positional[0] | default("info") %}
+<div class="alert alert-{{ variant }}" role="alert">{{ body }}</div>

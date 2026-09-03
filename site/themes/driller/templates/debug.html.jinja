@@ -1,0 +1,23 @@
+{# Debug panel partial - include in any template to show debug info.
+   Renders only when dev.debug is enabled in config.yaml.
+
+   Usage:
+     {% include "debug.html.jinja" %}
+
+   The ?acdbg query parameter provides a server-injected debug panel
+   without needing this template include. Append ?acdbg to any page URL
+   in dev mode to inspect the full template context, page hierarchy,
+   and validation issues.
+#}
+{% if dev.debug %}
+<div class="debug">
+    <strong>Dev debug</strong> is enabled.
+    Tip: append <code>?acdbg</code> to any page URL for the full debug panel.
+</div>
+<div class="debug-panel">
+    <h3>Page Context</h3>
+    <pre>{{ debug(page) }}</pre>
+    <h3>Site Context</h3>
+    <pre>{{ debug(site) }}</pre>
+</div>
+{% endif %}

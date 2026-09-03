@@ -1,4 +1,10 @@
-# FORK.md
+---
+title: Migrating from drill
+lead: "How driller relates to fcsonline/drill, what stays the same, and how to switch."
+menu:
+  order: 5
+---
+# Migrating from drill
 
 **Driller** is a maintained fork of [fcsonline/drill](https://github.com/fcsonline/drill).
 
@@ -24,4 +30,4 @@ does not need changes.
 
 ## License
 
-GPL-3.0-or-later. See [LICENSE](./LICENSE).
+GPL-3.0-or-later. See [LICENSE](https://github.com/zoosky/driller/blob/main/LICENSE).

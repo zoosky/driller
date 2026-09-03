@@ -1,0 +1,12 @@
+{# Breadcrumb navigation partial (Feature f023).
+   Include in any template: {% include "breadcrumbs.html.jinja" %}
+   Requires page.breadcrumbs and page.title in the template context. #}
+{% if page.breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Breadcrumb">
+    {% for crumb in page.breadcrumbs %}
+        <a href="{{ crumb.url }}">{{ crumb.title }}</a>
+        <span aria-hidden="true">/</span>
+    {% endfor %}
+    <span aria-current="page">{{ page.title }}</span>
+</nav>
+{% endif %}

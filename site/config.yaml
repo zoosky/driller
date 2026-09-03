@@ -1,0 +1,88 @@
+# Accent CMS project for the driller website, https://zoosky.github.io/driller
+#
+# Preview locally with `accent serve` from this directory (or
+# `accent serve -c site/config.yaml` from the repository root) and build the
+# static site with `accent build --base-url https://zoosky.github.io/driller`.
+# The Pages workflow in .github/workflows/pages.yml runs that build on every
+# push to main and publishes the output to GitHub Pages.
+
+server:
+  address: "127.0.0.1"
+  port: 4420
+
+content:
+  directory: "./content"
+  # The documentation pages are the repository's own markdown files, mounted
+  # into the content tree so the website and the GitHub file views share one
+  # source. Each mounted file carries a small frontmatter block that sets its
+  # title, summary, and position in the docs navigation.
+  mounts:
+    - source: ../docs
+      mount: /docs
+      default_template: docs
+    - source: ../SYNTAX.md
+      mount: /docs/syntax
+      default_template: docs
+    - source: ../FORK.md
+      mount: /docs/migrating-from-drill
+      default_template: docs
+    - source: ../CONTRIBUTING.md
+      mount: /docs/contributing
+      default_template: docs
+    - source: ../CHANGELOG.md
+      mount: /changelog
+      default_template: default
+
+theme:
+  name: "driller"
+  directory: "./themes"
+
+site:
+  name: "Driller"
+  url: https://zoosky.github.io/driller
+  description: "A clean HTTP load-test drill: Ansible-style YAML plans, Rust runtime, RPS and percentiles per run."
+  language: en
+
+# Code block rendering
+code:
+  theme: "base16-ocean.dark"
+
+# Markdown extensions. Smart punctuation stays off so quotes and dashes in
+# prose about command-line flags render exactly as written.
+markdown:
+  tables: true
+  footnotes: true
+  strikethrough: true
+  tasklists: true
+  heading_attributes: true
+  smart_punctuation: false
+  gfm: true
+
+# Client-side search over the JSON index the build writes to _search/.
+search:
+  backend: simple
+  content_length: 20000
+  exclude:
+    - "/404"
+    - "/tags/*"
+
+# llms.txt discovery files for LLM crawlers.
+llms:
+  enabled: true
+  description: |
+    Driller is a command-line HTTP load tester written in Rust. Benchmarks are
+    Ansible-style YAML plans; a run reports requests per second, a status-code
+    breakdown, and latency percentiles.
+  extra_links:
+    - title: "Source code"
+      url: "https://github.com/zoosky/driller"
+    - title: "Crate on crates.io"
+      url: "https://crates.io/crates/driller"
+
+# No text-based diagrams on this site; skip the render pipeline.
+diagrams:
+  enabled: false
+
+dev:
+  hot_reload: true
+  browser_reload: true

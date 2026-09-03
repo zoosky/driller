@@ -1,0 +1,38 @@
+{# Documentation topic navigation: a pill bar listing every page of the docs
+   section, grouped by menu order. Orders 1 and 2 are the learning path,
+   3 and 4 the reference pages, 5 and up the project pages.
+
+   On the section index the pills come from page.children. On a docs page
+   they come from page.siblings plus the page itself, which accent leaves
+   out of the sibling list. Walking the order range keeps the pills in menu
+   order without mutable template state, so a page's position is set by the
+   menu.order in its frontmatter alone. Pages outside the docs section get
+   no bar. #}
+{% set docs_root = url('/docs') %}
+{% if page.url == docs_root %}
+    {% set nav_items = page.children %}
+    {% set nav_is_index = true %}
+{% elif page.parent and page.parent.url == docs_root %}
+    {% set nav_items = page.siblings %}
+    {% set nav_is_index = false %}
+{% else %}
+    {% set nav_items = [] %}
+    {% set nav_is_index = false %}
+{% endif %}
+{% if nav_is_index or nav_items %}
+<nav class="docs-nav" aria-label="Documentation topics">
+    {% for group in [["Learn", 1, 2], ["Reference", 3, 4], ["Project", 5, 20]] %}
+    <div class="docs-nav-group">
+        <span class="docs-nav-label">{{ group[0] }}</span>
+        {% for o in range(group[1], group[2] + 1) %}
+            {% for p in nav_items %}{% if p.order == o %}
+            <a href="{{ p.url }}" class="docs-nav-pill">{{ p.title }}</a>
+            {% endif %}{% endfor %}
+            {% if not nav_is_index and page.order == o %}
+            <a href="{{ page.url }}" class="docs-nav-pill active" aria-current="page">{{ page.title }}</a>
+            {% endif %}
+        {% endfor %}
+    </div>
+    {% endfor %}
+</nav>
+{% endif %}

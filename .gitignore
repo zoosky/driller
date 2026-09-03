@@ -27,3 +27,11 @@ cobertura.xml
 # install embeds the commit in `--version` (see CONTRIBUTING.md "Releasing").
 # Force-staged for the publish only; never committed.
 /git-hash
+
+# Website (site/): accent runtime caches and local build output. The site
+# is built in CI by .github/workflows/pages.yml; nothing generated is
+# committed.
+site/.media-cache/
+site/.diagram-cache/
+site/.admin/
+site/output/

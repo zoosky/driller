@@ -1,0 +1,141 @@
+/// Body, header, nav, main, and footer layout.
+
+body {
+  font-family: var(--font-sans);
+  line-height: var(--line-height);
+  color: var(--color-text);
+  background: var(--color-bg);
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 2.5rem 2rem;
+}
+
+header {
+  margin-bottom: 2.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+header nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.site-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.site-cursor {
+  font-family: var(--font-mono);
+  color: var(--color-link);
+  font-weight: 400;
+  font-size: 1.1em;
+  margin-right: 2px;
+}
+
+header ul {
+  display: flex;
+  list-style: none;
+  gap: 1rem;
+}
+
+header a {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+header a:hover,
+header a.active {
+  color: var(--color-link);
+}
+
+// Search + theme toggle grouped on the right
+.nav-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+// Dark/light mode toggle button
+.theme-toggle {
+  background: none;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--color-text-muted);
+  transition: color 0.15s, border-color 0.15s;
+
+  &:hover {
+    color: var(--color-link);
+    border-color: var(--color-link);
+  }
+}
+
+// Show moon icon in light mode, sun icon in dark mode
+.theme-toggle-dark {
+  display: none;
+}
+
+[data-theme="dark"] .theme-toggle-light {
+  display: none;
+}
+
+[data-theme="dark"] .theme-toggle-dark {
+  display: inline;
+}
+
+main {
+  min-height: 60vh;
+}
+
+footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 4rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-faint);
+  font-size: 0.78rem;
+
+  a {
+    color: var(--color-text-muted);
+    text-decoration: none;
+
+    &:hover {
+      color: var(--color-link);
+    }
+  }
+
+  .footer-sep {
+    color: var(--color-border-strong);
+  }
+}
+
+// Responsive: stack header nav at narrow widths
+@media (max-width: 640px) {
+  body {
+    padding: 1.25rem 1rem;
+  }
+
+  header nav {
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: center;
+  }
+}

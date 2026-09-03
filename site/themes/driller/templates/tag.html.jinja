@@ -1,0 +1,38 @@
+{% extends "base.html.jinja" %}
+
+{% block title %}Tag: {{ taxonomy.current_tag }} - {{ site.name }}{% endblock %}
+
+{% block content %}
+<article>
+    <h1>Tag: <span class="tag tag-heading">{{ taxonomy.current_tag }}</span></h1>
+    {% if taxonomy.pages %}
+    <ul class="tag-pages">
+        {% for p in taxonomy.pages %}
+        <li>
+            <a href="{{ p.url | safe }}">{{ p.title }}</a>
+            {% if p.date %}<time>{{ p.date }}</time>{% endif %}
+            {% if p.lead %}<p>{{ p.lead }}</p>{% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No pages found for this tag.</p>
+    {% endif %}
+    <p><a href="{{ url('/tags') }}" class="back-link">&larr; All tags</a></p>
+    {% if taxonomy.tags | length > 1 %}
+    <nav class="tag-siblings">
+        <h3>Other Tags</h3>
+        <ul class="tag-list">
+            {% for tag in taxonomy.tags %}
+            {% if tag.name != taxonomy.current_tag %}
+            <li>
+                <a href="{{ url('/tags/' ~ tag.name) }}">{{ tag.name }}</a>
+                <span class="tag-count">({{ tag.count }})</span>
+            </li>
+            {% endif %}
+            {% endfor %}
+        </ul>
+    </nav>
+    {% endif %}
+</article>
+{% endblock %}

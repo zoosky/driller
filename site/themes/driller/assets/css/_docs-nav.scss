@@ -1,0 +1,71 @@
+/// Docs topic pill navigation.
+
+.docs-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 1.75rem;
+  padding: 14px 18px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.docs-nav-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.docs-nav-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-nav-label);
+  margin-right: 4px;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+}
+
+.docs-nav-pill {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.15s, background 0.15s;
+}
+
+.docs-nav-pill:hover {
+  color: var(--color-text);
+  background: var(--color-nav-pill-hover-bg);
+}
+
+.docs-nav-pill.active {
+  color: var(--color-link);
+  background: var(--color-nav-pill-active-bg);
+}
+
+@media (max-width: 640px) {
+  .docs-nav {
+    gap: 10px;
+    padding: 10px 12px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .docs-nav-group {
+    gap: 3px;
+  }
+
+  .docs-nav-label {
+    display: none;
+  }
+}

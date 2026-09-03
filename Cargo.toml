@@ -14,6 +14,7 @@ exclude = [
     ".gitignore",
     ".rustfmt.toml",
     "example/server/",
+    "site/",
 ]
 
 # Combined library + binary package. The library (`src/lib.rs`) is the reusable

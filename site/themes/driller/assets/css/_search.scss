@@ -1,0 +1,135 @@
+/// Search form styles (Feature 092).
+///
+/// Provides styling for the client-side search form rendered by
+/// `search_form()` template function and `[search]` shortcode.
+///
+/// In the header nav the form stays compact (140px) and expands on
+/// focus so it does not crowd out navigation links.
+
+.acms-search-form {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+  max-width: 400px;
+}
+
+// Compact variant when placed inside the nav-tools group
+.nav-tools .acms-search-form {
+  width: auto;
+  max-width: none;
+}
+
+.acms-search-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.95rem;
+  font-family: var(--font-sans);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-muted);
+  color: var(--color-text);
+  outline: none;
+  transition: border-color 0.2s, width 0.2s, box-shadow 0.2s;
+
+  &:focus {
+    border-color: var(--color-link);
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15);
+  }
+
+  &::placeholder {
+    color: var(--color-text-faint);
+  }
+}
+
+// Compact input inside nav-tools - narrow by default, expands on focus
+.nav-tools .acms-search-input {
+  width: 140px;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
+
+  &:focus {
+    width: 220px;
+  }
+}
+
+.acms-search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  max-height: 400px;
+  overflow-y: auto;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border-strong);
+  border-top: none;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+// Wider dropdown when search is in the nav-tools group
+.nav-tools .acms-search-results {
+  min-width: 320px;
+  right: 0;
+  left: auto;
+}
+
+.acms-search-result {
+  display: block;
+  padding: 0.6rem 0.75rem;
+  text-decoration: none;
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover,
+  &[aria-selected="true"] {
+    background: var(--color-bg-muted);
+  }
+}
+
+.acms-search-result-title {
+  display: block;
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 0.15rem;
+}
+
+.acms-search-result-snippet {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+.acms-search-highlight {
+  background: rgba(16, 185, 129, 0.25);
+  padding: 0 1px;
+  border-radius: 2px;
+}
+
+.acms-search-empty {
+  padding: 0.75rem;
+  text-align: center;
+  color: var(--color-text-faint);
+  font-size: 0.9rem;
+}
+
+// On narrow screens the nav stacks but nav-tools stays as a row
+@media (max-width: 640px) {
+  .nav-tools .acms-search-input {
+    width: 120px;
+
+    &:focus {
+      width: 180px;
+    }
+  }
+
+  .nav-tools .acms-search-results {
+    min-width: 260px;
+  }
+}

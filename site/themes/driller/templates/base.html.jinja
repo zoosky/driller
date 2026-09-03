@@ -1,0 +1,86 @@
+{# Base layout for the driller website: head metadata, the header
+   navigation, the documentation pill bar, the page body, and the footer.
+   Derived from the Accent CMS "Agentic" theme (MIT). Every internal href
+   goes through url() so the site works under the /driller prefix of its
+   GitHub Pages project URL as well as at a domain root. #}
+<!DOCTYPE html>
+<html lang="{{ site.current_language | default(value=site.language) }}">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ page.title }} - {{ site.name }}{% endblock %}</title>
+    <meta name="description" content="{{ page.description | default(value=site.description) }}">
+    {% if page.noindex %}
+    <meta name="robots" content="noindex,nofollow">
+    {% endif %}
+    <link rel="icon" href="{{ url('/theme/assets/favicon.ico') }}" sizes="32x32">
+    <link rel="icon" type="image/svg+xml" href="{{ url('/theme/assets/logo.svg') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url('/theme/assets/apple-touch-icon.png') }}">
+    <link rel="mask-icon" href="{{ url('/theme/assets/safari-pinned-tab.svg') }}" color="#10b981">
+    <meta name="theme-color" content="#0a0a0a">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    {% for css in theme.assets.css %}
+    <link rel="stylesheet" href="{{ url('/theme/assets/' ~ css) }}">
+    {% endfor %}
+    {{ json_ld() }}
+</head>
+
+<body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <header>
+        <nav aria-label="Site">
+            <a href="{{ url('/') }}" class="site-title"><span class="site-cursor" aria-hidden="true">&gt;_</span>{{ site.name }}</a>
+            <ul>
+                <li><a href="{{ url('/docs') }}"{% if page.url is startingwith(url('/docs')) %} class="active"{% endif %}>Docs</a></li>
+                <li><a href="{{ url('/changelog') }}"{% if page.url == url('/changelog') %} class="active"{% endif %}>Changelog</a></li>
+                <li><a href="https://github.com/zoosky/driller">GitHub</a></li>
+                <li><a href="https://crates.io/crates/driller">crates.io</a></li>
+            </ul>
+            <div class="nav-tools">
+                {{ search_form("Search docs") }}
+                <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+                    <span class="theme-toggle-light">&#9790;</span>
+                    <span class="theme-toggle-dark">&#9788;</span>
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <main id="main-content">
+        {% include "partials/docs-nav.html.jinja" %}
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        <span>Driller is free software, licensed GPL-3.0-or-later.</span>
+        <span class="footer-sep" aria-hidden="true">&middot;</span>
+        <a href="https://github.com/zoosky/driller/blob/main/LICENSE">License</a>
+        <span class="footer-sep" aria-hidden="true">&middot;</span>
+        <a href="https://github.com/zoosky/driller/issues">Issues</a>
+        <span class="footer-sep" aria-hidden="true">&middot;</span>
+        <span>Built with <a href="https://accentcms.dev">Accent CMS</a></span>
+    </footer>
+
+    {% for js in theme.assets.js %}
+    <script src="{{ url('/theme/assets/' ~ js) }}"></script>
+    {% endfor %}
+    <script>
+        (function () {
+            var d = document.documentElement, s = localStorage.getItem('theme');
+            if (s) d.setAttribute('data-theme', s);
+            else d.setAttribute('data-theme', 'dark');
+            var btn = document.querySelector('.theme-toggle');
+            if (btn) btn.addEventListener('click', function () {
+                var cur = d.getAttribute('data-theme');
+                var next = cur === 'dark' ? 'light' : 'dark';
+                d.setAttribute('data-theme', next);
+                localStorage.setItem('theme', next);
+            });
+        })();
+    </script>
+</body>
+
+</html>

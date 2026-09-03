@@ -1,0 +1,41 @@
+{# Documentation page: breadcrumbs, title, a back link to the section index,
+   the table of contents, the rendered markdown, a listing of child pages on
+   the section index, and previous/next links between docs pages. #}
+{% extends "base.html.jinja" %}
+
+{% block content %}
+{% set docs_root = url('/docs') %}
+<article>
+    {% include "breadcrumbs.html.jinja" %}
+
+    <h1>{{ page.title }}</h1>
+
+    {% if page.parent and page.parent.url == docs_root %}
+    <a href="{{ page.parent.url }}" class="back-link">&larr; Back to {{ page.parent.title }}</a>
+    {% endif %}
+
+    {% include "toc.html.jinja" %}
+
+    <div class="content prose">
+        {{ page.content | safe }}
+    </div>
+
+    {% if page.children %}
+    <h2>Pages</h2>
+    <ul class="docs-listing">
+    {% for child in page.children %}
+        <li>
+            <h3><a href="{{ child.url }}">{{ child.title }}</a></h3>
+            {% if child.lead %}<p class="lead">{{ child.lead }}</p>{% endif %}
+        </li>
+    {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if page.parent and page.parent.url == docs_root %}
+    {% include "page-nav.html.jinja" %}
+    {% endif %}
+</article>
+
+{% include "debug.html.jinja" %}
+{% endblock %}
