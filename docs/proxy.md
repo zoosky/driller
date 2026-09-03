@@ -2,7 +2,7 @@
 title: Proxies
 lead: "Route load through HTTP and HTTPS proxies with the standard environment variables, and keep internal targets direct with NO_PROXY."
 menu:
-  order: 4
+  order: 5
 ---
 # Proxies
 

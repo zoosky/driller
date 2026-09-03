@@ -2,7 +2,7 @@
 title: Contributing
 lead: "How to propose a change, the quality checks every pull request must pass, and how releases are cut."
 menu:
-  order: 6
+  order: 7
 ---
 # Contributing
 
@@ -58,7 +58,8 @@ Use GitHub Issues. Include:
 The website at <https://zoosky.github.io/driller> is built from this
 repository with [Accent CMS](https://accentcms.dev). The pages under
 `/docs` are the markdown files you already edit -- `docs/*.md`, `SYNTAX.md`,
-`FORK.md`, `CONTRIBUTING.md` -- mounted into the site by `site/config.yaml`,
+`example/README.md`, `FORK.md`, `CONTRIBUTING.md` -- mounted into the site by
+`site/config.yaml`,
 so a documentation change needs no second copy. The frontmatter block at the
 top of each of those files sets the page title, its one-line summary, and
 its `menu.order` in the docs navigation; keep it when editing. The landing

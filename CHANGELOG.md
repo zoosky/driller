@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Project website at <https://zoosky.github.io/driller>, built with
   [Accent CMS](https://accentcms.dev) from the repository's own markdown
-  (`docs/`, `SYNTAX.md`, `FORK.md`, `CONTRIBUTING.md`, `CHANGELOG.md`) plus
+  (`docs/`, `SYNTAX.md`, `example/README.md`, `FORK.md`, `CONTRIBUTING.md`,
+  `CHANGELOG.md`) plus
   a landing page and a getting-started guide under `site/`. The new `Pages`
   workflow builds it on every push to `main` (and checks links on pull
   requests) and publishes the output to GitHub Pages. The mounted markdown

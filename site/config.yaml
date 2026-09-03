@@ -23,6 +23,9 @@ content:
     - source: ../SYNTAX.md
       mount: /docs/syntax
       default_template: docs
+    - source: ../example/README.md
+      mount: /docs/examples
+      default_template: docs
     - source: ../FORK.md
       mount: /docs/migrating-from-drill
       default_template: docs

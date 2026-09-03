@@ -1,4 +1,10 @@
-# How to play with driller
+---
+title: Examples
+lead: "Runnable benchmark plans and the axum fixture server that ships with the repository, and how to run each of them."
+menu:
+  order: 3
+---
+# Examples
 
 These examples run driller against a small local fixture server that serves the
 `server/responses/` files and a few dynamic endpoints (sessions, a flaky POST,

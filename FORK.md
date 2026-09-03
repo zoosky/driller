@@ -2,7 +2,7 @@
 title: Migrating from drill
 lead: "How driller relates to fcsonline/drill, what stays the same, and how to switch."
 menu:
-  order: 5
+  order: 6
 ---
 # Migrating from drill
 

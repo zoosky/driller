@@ -2,7 +2,7 @@
 title: CLI reference
 lead: "Every driller flag, the per-request and statistics output in text and JSON, and the tokio runtime tuning guide."
 menu:
-  order: 3
+  order: 4
 ---
 # CLI reference
 
