@@ -3,6 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/driller.svg)](https://crates.io/crates/driller)
 [![License: GPL-3.0](https://img.shields.io/crates/l/driller.svg)](./LICENSE)
 [![CI](https://github.com/zoosky/driller/actions/workflows/general.yml/badge.svg)](https://github.com/zoosky/driller/actions/workflows/general.yml)
+[![Documentation](https://img.shields.io/badge/docs-zoosky.github.io%2Fdriller-10b981)](https://zoosky.github.io/driller)
 
 A clean HTTP load-test drill. Ansible-style YAML plans, Rust runtime,
 RPS and percentiles per run -- no fancy bits.
