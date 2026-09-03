@@ -1,0 +1,26 @@
+/// Language switcher styles (Feature 057).
+
+.language-switcher {
+  display: flex;
+  list-style: none;
+  gap: 0.25rem;
+  margin-left: 1rem;
+  padding-left: 1rem;
+  border-left: 1px solid var(--color-border-strong);
+}
+
+.language-switcher span.active {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.language-switcher a {
+  color: var(--color-text-faint);
+  text-decoration: none;
+  font-size: 0.85rem;
+  transition: color 0.15s;
+}
+
+.language-switcher a:hover {
+  color: var(--color-link);
+}

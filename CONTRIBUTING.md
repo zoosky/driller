@@ -1,4 +1,10 @@
-# Contributing to Driller
+---
+title: Contributing
+lead: "How to propose a change, the quality checks every pull request must pass, and how releases are cut."
+menu:
+  order: 7
+---
+# Contributing
 
 Thank you for considering a contribution to driller.
 
@@ -46,6 +52,40 @@ Use GitHub Issues. Include:
 - The benchmark YAML (minimized if possible)
 - Expected vs. actual behavior
 - Full error output
+
+## Documentation website
+
+The website at <https://zoosky.github.io/driller> is built from this
+repository with [Accent CMS](https://accentcms.dev). The pages under
+`/docs` are the markdown files you already edit -- `docs/*.md`, `SYNTAX.md`,
+`example/README.md`, `FORK.md`, `CONTRIBUTING.md` -- mounted into the site by
+`site/config.yaml`,
+so a documentation change needs no second copy. The frontmatter block at the
+top of each of those files sets the page title, its one-line summary, and
+its `menu.order` in the docs navigation; keep it when editing. The landing
+page, the getting-started guide, and the theme live under `site/`.
+
+To preview locally, [install accent](https://docs.accentcms.dev/docs/getting-started)
+and run, from the repository root:
+
+```sh
+accent serve -c site/config.yaml --no-tls   # http://127.0.0.1:4420/driller
+```
+
+The site is served under `/driller` locally as well, mirroring its GitHub
+Pages project URL, so links behave exactly as they will once deployed.
+
+To run the same build and link check as CI:
+
+```sh
+accent build -c site/config.yaml --clean -o site/output \
+  --base-url https://zoosky.github.io/driller --strict-links
+accent serve-static --dir site/output --no-tls   # http://127.0.0.1:4403/driller
+```
+
+The `Pages` workflow (`.github/workflows/pages.yml`) runs that build on every
+push to `main` and deploys the output; pull requests that touch the site or
+the mounted files get the build and link check only.
 
 ## Releasing
 

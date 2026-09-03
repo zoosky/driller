@@ -1,0 +1,38 @@
+/// Debug panel and debug output styles.
+
+.debug {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem;
+  margin: 0.5rem 0;
+  overflow-x: auto;
+  color: #fcd34d;
+}
+
+.debug-panel {
+  margin-top: 2rem;
+  padding: 1.25rem;
+  border: 2px solid rgba(251, 191, 36, 0.2);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-subtle);
+
+  h3 {
+    margin: 0 0 0.75rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fbbf24;
+  }
+
+  pre {
+    background: var(--color-bg-muted);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem;
+    overflow-x: auto;
+    font-size: 0.8rem;
+    margin-bottom: 0.5rem;
+  }
+}

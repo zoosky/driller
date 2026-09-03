@@ -1,0 +1,157 @@
+/// Landing page and modular page section styles.
+
+.landing-page {
+  max-width: 100%;
+}
+
+.landing-hero {
+  text-align: center;
+  padding: 3.5rem 1rem;
+
+  h1 {
+    font-size: 2.25rem;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 0.75rem;
+    letter-spacing: -0.02em;
+  }
+
+  p {
+    font-size: 1.1rem;
+    color: var(--color-text-muted);
+    max-width: 600px;
+    margin: 0 auto;
+  }
+}
+
+.landing-content {
+  max-width: var(--max-width);
+  margin: 0 auto;
+}
+
+.landing-features {
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 2.5rem;
+  margin: 2.5rem 0;
+}
+
+.landing-cta {
+  text-align: center;
+  padding: 2.5rem 1rem;
+}
+
+.landing-section {
+  padding: 2.5rem 0;
+}
+
+// Modular pages (Feature 058)
+.modular-page {
+  max-width: 100%;
+}
+
+.module {
+  padding: 2.5rem 0;
+  border-bottom: 1px solid var(--color-border);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.module-content {
+  max-width: var(--max-width);
+  margin: 0 auto;
+}
+
+// Driller landing page: the hero carries a quick-start code block and the
+// call-to-action buttons; the feature list renders as a card grid. Code
+// styling mirrors article .content in _content.scss, which does not apply
+// outside a .content wrapper.
+.landing-hero pre,
+.landing-section pre,
+.landing-cta pre {
+  text-align: left;
+  background: var(--color-bg-muted);
+  color: var(--color-text);
+  padding: 1.25rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.landing-hero pre {
+  display: inline-block;
+  min-width: min(100%, 560px);
+  margin: 1.75rem auto;
+}
+
+.landing-page pre code {
+  background: none;
+  padding: 0;
+  border: none;
+  font-size: inherit;
+}
+
+.landing-page code {
+  background: var(--color-bg-muted);
+  padding: 0.2rem 0.4rem;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  border: 1px solid var(--color-border);
+}
+
+.landing-hero .btn,
+.landing-hero .sc-button {
+  margin: 0.25rem;
+}
+
+.landing-features h2,
+.landing-section h2,
+.landing-cta h2 {
+  margin-top: 0;
+}
+
+.landing-features ul {
+  list-style: none;
+  margin: 1.5rem 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.landing-features li {
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  font-size: 0.95rem;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+.landing-features li strong {
+  color: var(--color-text);
+}
+
+.landing-section p,
+.landing-cta p {
+  color: var(--color-text-muted);
+}
+
+.landing-section a,
+.landing-cta a:not(.btn):not(.sc-button),
+.landing-features a {
+  color: var(--color-link);
+}
+
+@media (max-width: 640px) {
+  .landing-features {
+    padding: 1.5rem;
+  }
+}

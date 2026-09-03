@@ -1,0 +1,103 @@
+# Build the website in site/ with Accent CMS and publish it to GitHub Pages.
+#
+# The documentation pages are the repository's own markdown files (docs/,
+# SYNTAX.md, FORK.md, CONTRIBUTING.md, CHANGELOG.md), mounted into the site
+# by site/config.yaml, so a change to any of them rebuilds the site. Pull
+# requests get the build and link check only; the deploy job runs for
+# pushes to main.
+#
+# One-time repository setup: Settings > Pages > Source: "GitHub Actions".
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "docs/**"
+      - "SYNTAX.md"
+      - "example/README.md"
+      - "FORK.md"
+      - "CONTRIBUTING.md"
+      - "CHANGELOG.md"
+      - ".github/workflows/pages.yml"
+  pull_request:
+    paths:
+      - "site/**"
+      - "docs/**"
+      - "SYNTAX.md"
+      - "example/README.md"
+      - "FORK.md"
+      - "CONTRIBUTING.md"
+      - "CHANGELOG.md"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time; a queued deploy of a newer commit must not be
+# cancelled by a later push.
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # The Accent CMS release the site is built with. Bump deliberately, after
+  # a local build with the new version.
+  ACCENT_VERSION: v0.25.1
+  SITE_URL: https://zoosky.github.io/driller
+
+jobs:
+  build:
+    name: Build site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The official installer downloads the release archive, checks its
+      # SHA-256 against the signed checksums file, and verifies that
+      # signature with the release key. With the require-verify flag a
+      # missing checksum, signature, or gpg fails the install instead of
+      # warning, which is what an unattended build wants.
+      - name: Install Accent CMS
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/AccentCMS/accent/main/install.sh \
+            | ACCENT_VERSION="$ACCENT_VERSION" ACCENT_INSTALL_REQUIRE_VERIFY=1 sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # The path component of --base-url makes every internal URL carry the
+      # /driller prefix the project site is served under. --strict-links
+      # fails the build on any internal link whose target is missing from
+      # the output, which covers links into the mounted repository files as
+      # well as the site's own pages.
+      - name: Build
+        run: |
+          accent --version
+          accent build --config site/config.yaml --clean \
+            --output "$GITHUB_WORKSPACE/dist" \
+            --base-url "$SITE_URL" \
+            --strict-links
+          test -f "$GITHUB_WORKSPACE/dist/index.html"
+          test -f "$GITHUB_WORKSPACE/dist/404.html"
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

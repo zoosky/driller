@@ -1,0 +1,22 @@
+{# Not-found page. The build writes it to /404.html, which GitHub Pages
+   serves for every missing URL. #}
+{% extends "base.html.jinja" %}
+
+{% block title %}404 Page not found - {{ site.name }}{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <h1 class="error-status">404</h1>
+    <h2 class="error-title">Page not found</h2>
+    {% if page.content %}
+    <div class="error-content">{{ page.content | safe }}</div>
+    {% else %}
+    <p>The page could not be found.</p>
+    {% endif %}
+    <nav class="error-nav">
+        <a href="{{ url('/') }}">Home</a>
+        <span aria-hidden="true">&middot;</span>
+        <a href="{{ url('/docs') }}">Documentation</a>
+    </nav>
+</div>
+{% endblock %}

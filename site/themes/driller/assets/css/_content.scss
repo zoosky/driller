@@ -1,0 +1,167 @@
+/// Article content styles: headings, code, tables, blockquotes.
+///
+/// Explicit font-size and font-weight on all headings are required because
+/// the encre-css utility reset sets `h1-h6 { font-size: inherit; font-weight: inherit; }`,
+/// which strips browser defaults. Without these declarations, headings render
+/// at body-text size (16px / 400 weight).
+///
+/// Explicit `color` declarations are required throughout because the encre-css
+/// Preflight sets hardcoded colors on many elements that override CSS custom
+/// properties in dark mode.
+
+article h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 0.5rem;
+  color: var(--color-text);
+  letter-spacing: -0.02em;
+}
+
+article h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-top: 2.5rem;
+  margin-bottom: 0.5rem;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+}
+
+article h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 1.75rem;
+  margin-bottom: 0.5rem;
+  color: var(--color-text);
+}
+
+article h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 1.5rem;
+  margin-bottom: 0.25rem;
+  color: var(--color-text);
+}
+
+article time,
+article .author {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+article .content {
+  margin-top: 1.75rem;
+  color: var(--color-text);
+
+  // Override encre-css .prose token definitions.
+  &.prose {
+    --en-prose-body: var(--color-text);
+    --en-prose-headings: var(--color-text);
+    --en-prose-bold: var(--color-text);
+    --en-prose-links: var(--color-link);
+    --en-prose-lead: var(--color-text-muted);
+    --en-prose-bullets: var(--color-text-faint);
+    --en-prose-counters: var(--color-text-faint);
+    --en-prose-captions: var(--color-text-muted);
+    --en-prose-quotes: var(--color-text-muted);
+    --en-prose-quote-borders: var(--color-link);
+    --en-prose-code: var(--color-text);
+    --en-prose-pre-bg: var(--color-bg-muted);
+    --en-prose-pre-code: var(--color-text);
+    --en-prose-hr: var(--color-border);
+    --en-prose-td-borders: var(--color-border);
+    --en-prose-th-borders: var(--color-border-strong);
+    --en-prose-kbd-bg: var(--color-bg-muted);
+    --en-prose-kbd-text: var(--color-text);
+  }
+}
+
+// The typography utilities wrap inline code in literal backtick
+// pseudo-elements; the code background already marks it, so drop them.
+article .content.prose code::before,
+article .content.prose code::after {
+  content: none;
+}
+
+article .content p {
+  margin-bottom: 1rem;
+}
+
+article .content ul,
+article .content ol {
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+article .content code {
+  background: var(--color-bg-muted);
+  padding: 0.2rem 0.4rem;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  border: 1px solid var(--color-border);
+}
+
+article .content pre {
+  background: var(--color-bg-muted);
+  color: var(--color-text);
+  padding: 1.25rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  overflow-x: auto;
+  margin-bottom: 1.25rem;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+article .content pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
+  border: none;
+}
+
+article .content blockquote {
+  border-left: 3px solid var(--color-link);
+  padding-left: 1.25rem;
+  margin: 1.25rem 0;
+  color: var(--color-text-muted);
+}
+
+// Tables
+article .content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.25rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+article .content th {
+  text-align: left;
+  font-weight: 600;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 2px solid var(--color-border-strong);
+  background: var(--color-bg-subtle);
+  white-space: nowrap;
+}
+
+article .content td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: top;
+}
+
+article .content tbody tr:last-child td {
+  border-bottom: none;
+}
+
+article .content td code,
+article .content th code {
+  font-size: 0.85em;
+  padding: 0.1rem 0.3rem;
+}

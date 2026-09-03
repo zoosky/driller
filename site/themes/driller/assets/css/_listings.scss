@@ -1,0 +1,62 @@
+/// Docs and blog listings with pagination.
+
+.docs-listing,
+.blog-listing {
+  list-style: none;
+  margin: 1.75rem 0;
+}
+
+.docs-listing li,
+.blog-listing li {
+  padding: 1.25rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.docs-listing li:last-child,
+.blog-listing li:last-child {
+  border-bottom: none;
+}
+
+.docs-listing h3,
+.blog-listing h3 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.docs-listing h3 a,
+.blog-listing h3 a {
+  color: var(--color-link);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.docs-listing h3 a:hover,
+.blog-listing h3 a:hover {
+  text-decoration: underline;
+}
+
+.docs-listing time,
+.blog-listing time {
+  color: var(--color-text-faint);
+  font-size: 0.85rem;
+}
+
+.docs-listing .lead,
+.blog-listing .lead {
+  margin: 0.25rem 0;
+  color: var(--color-text-tag);
+  font-size: 0.95rem;
+}
+
+.listing-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.listing-tags {
+  display: flex;
+  gap: 0.25rem;
+}

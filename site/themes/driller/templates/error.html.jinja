@@ -1,0 +1,18 @@
+{# Generic error page; error/404.html.jinja handles the one static hosts
+   actually serve. #}
+{% extends "base.html.jinja" %}
+
+{% block title %}{{ error.status }} {{ error.title }} - {{ site.name }}{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <h1 class="error-status">{{ error.status }}</h1>
+    <h2 class="error-title">{{ error.title }}</h2>
+    {% if page.content %}
+    <div class="error-content">{{ page.content | safe }}</div>
+    {% else %}
+    <p>Something went wrong.</p>
+    {% endif %}
+    <p class="error-home"><a href="{{ url('/') }}">Back to home</a></p>
+</div>
+{% endblock %}

@@ -1,0 +1,84 @@
+/// Taxonomy tag list, tag pages (Feature 054).
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 1rem 0;
+
+  a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: var(--color-bg-tag);
+    padding: 0.3rem 0.7rem;
+    border-radius: var(--radius-pill);
+    font-size: 0.9rem;
+    color: var(--color-text-tag);
+    text-decoration: none;
+    border: 1px solid var(--color-border);
+    transition: background 0.15s, border-color 0.15s;
+
+    &:hover {
+      background: var(--color-bg-tag-hover);
+      color: var(--color-text);
+      border-color: var(--color-link);
+    }
+  }
+}
+
+// Tag name pill inside h1 heading
+.tag-heading {
+  display: inline-flex;
+  align-items: center;
+  background: var(--color-bg-tag);
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.85em;
+  color: var(--color-link);
+  vertical-align: baseline;
+  border: 1px solid var(--color-border);
+}
+
+.tag-count {
+  font-size: 0.8em;
+  color: var(--color-text-faint);
+}
+
+// Sibling tags navigation on tag detail pages
+.tag-siblings {
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--color-border);
+
+  h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--color-text);
+  }
+}
+
+.tag-pages {
+  list-style: none;
+  margin: 1rem 0;
+
+  li {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--color-border);
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+
+  a {
+    color: var(--color-link);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{% extends "base.html.jinja" %}
+
+{% block title %}Tags - {{ site.name }}{% endblock %}
+
+{% block content %}
+<article>
+    <h1>Tags</h1>
+    {% if taxonomy.tags %}
+    <ul class="tag-list">
+        {% for tag in taxonomy.tags %}
+        <li>
+            <a href="{{ url('/tags/' ~ tag.name) }}">{{ tag.name }}</a>
+            <span class="tag-count">({{ tag.count }})</span>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No tags found.</p>
+    {% endif %}
+</article>
+{% endblock %}

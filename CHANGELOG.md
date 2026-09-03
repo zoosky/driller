@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Project website at <https://zoosky.github.io/driller>, built with
+  [Accent CMS](https://accentcms.dev) from the repository's own markdown
+  (`docs/`, `SYNTAX.md`, `example/README.md`, `FORK.md`, `CONTRIBUTING.md`,
+  `CHANGELOG.md`) plus
+  a landing page and a getting-started guide under `site/`. The new `Pages`
+  workflow builds it on every push to `main` (and checks links on pull
+  requests) and publishes the output to GitHub Pages. The mounted markdown
+  files gained a short frontmatter block that sets each page's title,
+  summary, and position in the docs navigation. `site/` is excluded from the
+  crates.io package.
+
 ### Changed
 - A failed request now prints a concise, classified line instead of a raw
   `reqwest::Error` `Debug` dump. The line matches the success line format
@@ -302,7 +314,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.0-alpha.1] - 2026-05-22
 
 Friendly fork of [fcsonline/drill](https://github.com/fcsonline/drill) 0.9.0.
-See [FORK.md](./FORK.md) for rationale and migration instructions.
+See [FORK.md](https://github.com/zoosky/driller/blob/main/FORK.md) for rationale and migration instructions.
 
 ### Changed
 - Renamed crate and binary from `drill` to `driller`

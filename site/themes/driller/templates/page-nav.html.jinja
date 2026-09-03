@@ -1,0 +1,19 @@
+{# Previous/Next sibling page navigation partial (Feature f052).
+   Include in any template: {% include "page-nav.html.jinja" %}
+   Requires page.prev and/or page.next in the template context. #}
+{% if page.prev or page.next %}
+<nav class="page-nav" aria-label="Page navigation">
+    {% if page.prev %}
+    <a href="{{ page.prev.url }}" class="nav-prev">
+        <span class="nav-label">&larr; Previous</span>
+        <span class="nav-title">{{ page.prev.title }}</span>
+    </a>
+    {% endif %}
+    {% if page.next %}
+    <a href="{{ page.next.url }}" class="nav-next">
+        <span class="nav-label">Next &rarr;</span>
+        <span class="nav-title">{{ page.next.title }}</span>
+    </a>
+    {% endif %}
+</nav>
+{% endif %}

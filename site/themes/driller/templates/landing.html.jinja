@@ -1,0 +1,45 @@
+{# Landing page: the hero is the page body, followed by the named sections
+   the markdown defines with `---section: name---` markers. The features
+   and cta sections have dedicated styling; any other section renders as a
+   plain band in document order. #}
+{% extends "base.html.jinja" %}
+
+{% block title %}{{ site.name }}: HTTP load testing with YAML plans{% endblock %}
+
+{% block content %}
+<article class="landing-page">
+    {% if page.content %}
+    <section class="landing-hero">
+        <div class="landing-content">
+            {{ page.content | safe }}
+        </div>
+    </section>
+    {% endif %}
+
+    {% if page.sections.features is defined and page.sections.features %}
+    <section class="landing-features" id="features">
+        <div class="landing-content">
+            {{ page.sections.features | safe }}
+        </div>
+    </section>
+    {% endif %}
+
+    {% for name in page.sections %}
+        {% if name != "features" and name != "cta" %}
+        <section class="landing-section landing-{{ name }}" id="{{ name }}">
+            <div class="landing-content">
+                {{ page.sections[name] | safe }}
+            </div>
+        </section>
+        {% endif %}
+    {% endfor %}
+
+    {% if page.sections.cta is defined and page.sections.cta %}
+    <section class="landing-cta" id="cta">
+        <div class="landing-content">
+            {{ page.sections.cta | safe }}
+        </div>
+    </section>
+    {% endif %}
+</article>
+{% endblock %}

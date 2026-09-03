@@ -1,3 +1,9 @@
+---
+title: Benchmark syntax
+lead: "Every property of a benchmark plan: requests, assignments, includes, item and CSV loops, tags, and the interpolation variables."
+menu:
+  order: 2
+---
 # Benchmark syntax
 
 We're going to go through all of the benchmark options to understand all
@@ -23,7 +29,7 @@ plan:
       url: /api/organizations
 ```
 
-### Benchmark main properties
+## Benchmark main properties
 
 - `base`: Base url for all relative URL's in your plan. (Optional)
 - `iterations`: Number of loops is going to do (Optional, default: 1)
@@ -31,7 +37,7 @@ plan:
 - `rampup`: Amount of time it will take to start all iterations. (Optional)
 - `plan`: List of items to do in your benchmark. (Required)
 
-#### Plan items
+## Plan items
 
 - `include`: Include all requests in the given file.
 - `request`: Execute a HTTP request.
@@ -39,7 +45,7 @@ plan:
 
 All those three items can be combined with `name` property to be show in logs.
 
-#### Request item properties
+## Request item properties
 
 - `url`: Url to be request for this item
 - `headers`: List of custom headers you want to add in the requests.
@@ -53,7 +59,7 @@ All those three items can be combined with `name` property to be show in logs.
 - `assign`: Save the response in the context to be interpolated later.
 - `tags`: List of tags for that item.
 
-#### with_items_from_csv item properties
+## with_items_from_csv item properties
 
 This item can be specified one of two ways.  First, as a simple string specifying the csv file name.
 
@@ -62,7 +68,7 @@ Second, it can be a hash with the following properties:
  - `file_name`: csv file containing the records to be used as items
  - `quote_char`: character to use as quote in csv parsing.  Defaults to `"\""`, but can be set to `"'"`.  If your csv file has quoted strings that contain commas and that causes parse errors, make sure this value is set correctly.
 
-#### body item properties
+## body item properties
 
 The `body` property can be specified in different ways depending on the type of data you want to send in the request. Here are three variants:
 
@@ -75,7 +81,7 @@ The `body` property can be specified in different ways depending on the type of 
 3. `body: { file: path/to/file.txt }`
   - This variant allows you to specify a file path, and the content of the file will be used as the request body.
 
-#### tags item properties
+## tags item properties
 
 [Ansible](https://docs.ansible.com/ansible/latest/user_guide/playbooks_tags.html#special-tags-always-and-never)-like tags.
 
@@ -87,7 +93,7 @@ If you assign the `always` tag, `driller` will always run that item, unless you 
 
 If you assign the `never` tag to item, `driller` will skip that item unless you specifically request it (`--tags never`).
 
-### Built-in interpolation variables
+## Built-in interpolation variables
 
 In addition to anything you `assign`, a few variables are always available to `{{ }}` templates in URLs, headers, and bodies:
 

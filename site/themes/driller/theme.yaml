@@ -1,0 +1,28 @@
+name: Driller
+description: Dark-first documentation theme for the driller website, derived from the Accent CMS "Agentic" theme.
+version: "1.0.0"
+author: Driller contributors
+license: MIT
+assets:
+  css:
+    - css/main.scss
+    - css/utilities.css
+  js: []
+styling:
+  sass:
+    enabled: true
+    load_paths:
+      - css
+  utilities:
+    enabled: true
+    scan:
+      - templates/**/*.jinja
+    output: css/utilities.css
+    icons: true
+    typography: true
+    extend:
+      colors:
+        brand: "#10B981"
+        accent: "#10B981"
+  processing:
+    minify: true
