@@ -19,6 +19,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url('/theme/assets/apple-touch-icon.png') }}">
     <link rel="mask-icon" href="{{ url('/theme/assets/safari-pinned-tab.svg') }}" color="#10b981">
     <meta name="theme-color" content="#0a0a0a">
+    <meta name="google-site-verification" content="yS18C91qoSaQvcIS0JI33YvZ-KKx_kDXfJarTH7dqGw">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -61,13 +62,13 @@
         <span class="footer-sep" aria-hidden="true">&middot;</span>
         <a href="https://github.com/zoosky/driller/issues">Issues</a>
         <span class="footer-sep" aria-hidden="true">&middot;</span>
-        <span>Built with <a href="https://accentcms.dev">Accent CMS</a></span>
+        <span>Built with <a href="https://accentcms.dev">Accent CMS</a> <span class="footer-build" title="Accent CMS version and commit">{{ accent.version }} ({{ accent.git_hash }})</span></span>
     </footer>
 
     {% for js in theme.assets.js %}
-    <script src="{{ url('/theme/assets/' ~ js) }}"></script>
+    <script src="{{ url('/theme/assets/' ~ js) }}" nonce="{{ nonce }}"></script>
     {% endfor %}
-    <script>
+    <script nonce="{{ nonce }}">
         (function () {
             var d = document.documentElement, s = localStorage.getItem('theme');
             if (s) d.setAttribute('data-theme', s);

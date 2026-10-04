@@ -45,7 +45,7 @@ concurrency:
 env:
   # The Accent CMS release the site is built with. Bump deliberately, after
   # a local build with the new version.
-  ACCENT_VERSION: v0.25.1
+  ACCENT_VERSION: v0.26.0
   SITE_URL: https://zoosky.github.io/driller
 
 jobs:
@@ -67,17 +67,16 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       # The path component of --base-url makes every internal URL carry the
-      # /driller prefix the project site is served under. --strict-links
-      # fails the build on any internal link whose target is missing from
-      # the output, which covers links into the mounted repository files as
-      # well as the site's own pages.
+      # /driller prefix the project site is served under. The build fails on
+      # any internal link whose target is missing from the output, which
+      # covers links into the mounted repository files as well as the site's
+      # own pages.
       - name: Build
         run: |
           accent --version
           accent build --config site/config.yaml --clean \
             --output "$GITHUB_WORKSPACE/dist" \
-            --base-url "$SITE_URL" \
-            --strict-links
+            --base-url "$SITE_URL"
           test -f "$GITHUB_WORKSPACE/dist/index.html"
           test -f "$GITHUB_WORKSPACE/dist/404.html"
 

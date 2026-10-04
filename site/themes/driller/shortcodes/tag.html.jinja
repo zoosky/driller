@@ -1,0 +1,5 @@
+{#- The tag. Inline, so its body is a label spliced flush into the line. The
+    class is the one page tags already use, so both look alike.
+    `data-canonical` is the markup contract every conforming theme's tag
+    carries. -#}
+{% if attrs.href %}<a class="tag" data-canonical="tag" href="{{ url(attrs.href) }}">{{ body }}</a>{% else %}<span class="tag" data-canonical="tag">{{ body }}</span>{% endif %}

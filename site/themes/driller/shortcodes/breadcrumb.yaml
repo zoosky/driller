@@ -1,0 +1,10 @@
+# Component manifest for the breadcrumb, one of the canonical components.
+#
+# A trail of links an author writes, for a page whose position the site's own
+# hierarchy does not describe. The layout's trail comes from
+# `breadcrumbs.html.jinja`; this renders the same markup from content. Every
+# conforming theme implements `breadcrumb`, which takes no attributes.
+name: breadcrumb
+description: A trail of links leading to the current page, written in Markdown.
+params: []
+body: markdown

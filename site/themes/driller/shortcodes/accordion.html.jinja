@@ -1,0 +1,7 @@
+{#- The accordion. The manifest declares `body: markdown`, so the body arrives
+    between blank lines and renders as markdown inside the element.
+    `data-canonical` and `data-part` are the markup contract every conforming
+    theme's accordion carries. -#}
+<details class="accordion" data-canonical="accordion"{% if attrs.open %} open{% endif %}><summary data-part="summary">{{ attrs.summary | default("Details") }}</summary>
+{{ body }}
+</details>

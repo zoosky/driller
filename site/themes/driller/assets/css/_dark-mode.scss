@@ -19,26 +19,26 @@
   --color-nav-pill-hover-bg: #E5E5E5;
   --color-nav-pill-active-bg: rgba(5, 150, 105, 0.08);
 
-  // Alert light overrides
-  .alert-info {
+  // Callout light overrides
+  .callout-info {
     border-left-color: #059669;
     background: #ecfdf5;
     color: #065f46;
   }
 
-  .alert-warning {
+  .callout-warning {
     border-left-color: #d97706;
     background: #fffbeb;
     color: #92400e;
   }
 
-  .alert-success {
+  .callout-success {
     border-left-color: #059669;
     background: #ecfdf5;
     color: #065f46;
   }
 
-  .alert-danger {
+  .callout-danger {
     border-left-color: #dc2626;
     background: #fef2f2;
     color: #991b1b;

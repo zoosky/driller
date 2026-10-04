@@ -106,8 +106,7 @@
   border: 1px solid var(--color-border);
 }
 
-.landing-hero .btn,
-.landing-hero .sc-button {
+.landing-hero .btn {
   margin: 0.25rem;
 }
 
@@ -145,7 +144,7 @@
 }
 
 .landing-section a,
-.landing-cta a:not(.btn):not(.sc-button),
+.landing-cta a:not(.btn),
 .landing-features a {
   color: var(--color-link);
 }

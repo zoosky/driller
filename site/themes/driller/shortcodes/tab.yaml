@@ -1,0 +1,23 @@
+# Component manifest for one tab panel.
+#
+# A `tab` is normally read by its `tabs` parent rather than rendered on its own:
+# the parent builds the strip and the panels from `children`. This template is
+# what a `tab` written outside a `tabs` renders as, and it emits the body
+# unchanged -- the same thing a stray `[tab]` did.
+name: tab
+description: One panel of a tabbed switcher. Belongs inside `tabs`.
+params:
+  - name: label
+    type: string
+    required: false
+    description: The text on the tab button.
+  - name: id
+    type: string
+    required: false
+    description: >-
+      The panel's identifier, used for the anchor and for remembering the
+      selection. Defaults to the slugified label.
+body: markdown
+# `[tab "macOS"]` wrote the label as a bare word.
+migrate:
+  positional: [label]

@@ -17,8 +17,8 @@ cargo install driller
 driller run http://localhost:9000/api/users --stats
 ```
 
-[button primary href="/docs/getting-started"]Get started[/button]
-[button href="https://github.com/zoosky/driller"]Source on GitHub[/button]
+{% button variant="primary" href="/docs/getting-started" %}Get started{% /button %}
+{% button href="https://github.com/zoosky/driller" %}Source on GitHub{% /button %}
 
 ---section: features---
 

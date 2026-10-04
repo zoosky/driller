@@ -1,0 +1,16 @@
+# Component manifest for the tab container.
+#
+# The one shipped component that composes its children rather than wrapping its
+# body: the tab strip is a button per `{% tab %}` child, carrying that child's
+# label, and it has to be emitted before any panel. The template reads
+# `children` for exactly that.
+name: tabs
+description: A tabbed switcher whose panels are its `tab` children.
+params:
+  - name: group
+    type: string
+    required: false
+    description: >-
+      Tab groups with the same name switch together, and the selection is
+      remembered per group. Defaults to `default`.
+body: markdown

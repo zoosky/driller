@@ -1,0 +1,40 @@
+# Component manifest for the callout, one of the canonical components.
+#
+# A callout sets a passage apart as a note, a warning, or another kind of
+# notice. Every conforming theme implements `callout` with the `type`, `title`
+# and `collapsible` attributes, so content written with it renders under any of
+# them. The type name reaches the class attribute, so a theme styles
+# `callout-prereq` without this file learning what "prereq" means.
+name: callout
+description: A titled box that sets a passage apart as a note, a warning, or another kind of notice.
+params:
+  - name: type
+    type: string
+    required: false
+    description: >-
+      The kind of notice. Every conforming theme styles `info`, `success`,
+      `warning` and `danger`. Reaches the `callout-<type>` class and, when no
+      title is given, supplies the title in capitalised form. Defaults to
+      `info`.
+  - name: title
+    type: string
+    required: false
+    description: >-
+      The heading and the accessible label. Defaults to the capitalised type.
+  - name: collapsible
+    type: boolean
+    required: false
+    description: >-
+      Render as a `<details>`/`<summary>` disclosure instead of a `<div>`, so
+      the box starts closed.
+body: markdown
+# `[callout warning]` wrote the type as a bare word. `[alert]` and `[infobox]`
+# were this theme's callouts before the canonical names; content still written
+# with them migrates here, and alert's `variant` becomes `type`.
+migrate:
+  positional: [type]
+  from:
+    - name: alert
+      rename:
+        variant: type
+    - name: infobox
