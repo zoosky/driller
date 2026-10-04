@@ -1,0 +1,13 @@
+{#- The card.
+
+    The title link and the image go through `url()` for the reason the button's
+    link does: a sub-path install needs the deployment prefix. The manifest
+    declares `body: markdown`, so the body arrives between blank lines and
+    renders as markdown inside the `<article>`.
+
+    `data-canonical` and `data-part` are the markup contract every conforming
+    theme's card carries.
+-#}
+<article class="card" data-canonical="card">{% if attrs.image %}<img class="card-image" data-part="image" src="{{ url(attrs.image) }}" alt="" loading="lazy">{% endif %}{% if attrs.title %}<p class="card-title" data-part="title">{% if attrs.href %}<a href="{{ url(attrs.href) }}">{{ attrs.title }}</a>{% else %}{{ attrs.title }}{% endif %}</p>{% endif %}
+{{ body }}
+</article>

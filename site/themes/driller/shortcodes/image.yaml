@@ -1,0 +1,23 @@
+# Component manifest for the image, one of the canonical components.
+#
+# An image with alt text and an optional caption, written self-closing:
+# `{% image src="/media/diagram.png" alt="The request flow" /%}`. Every
+# conforming theme implements `image` with the `src`, `alt` and `caption`
+# attributes.
+name: image
+description: An image with alt text and an optional caption.
+params:
+  - name: src
+    type: media
+    required: true
+    description: The image file.
+  - name: alt
+    type: string
+    required: true
+    description: >-
+      What the image shows, for readers who cannot see it. Use an empty string
+      only for a purely decorative image.
+  - name: caption
+    type: string
+    required: false
+    description: Visible text shown under the image.

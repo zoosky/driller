@@ -1,0 +1,23 @@
+# Component manifest for the accordion, one of the canonical components.
+#
+# A section that stays collapsed behind its summary line until the reader
+# opens it: a plain `<details>`/`<summary>` pair. Every conforming theme
+# implements `accordion` with the `summary` and `open` attributes.
+name: accordion
+description: A collapsible section behind a summary line.
+params:
+  - name: summary
+    type: string
+    required: false
+    description: The always-visible line that opens and closes the section. Defaults to "Details".
+  - name: open
+    type: boolean
+    required: false
+    description: Start expanded.
+body: markdown
+# `[accordion "Show me"]` wrote the summary as a bare word. `[details]` was this
+# theme's accordion before the canonical names, and still migrates here.
+migrate:
+  positional: [summary]
+  from:
+    - name: details

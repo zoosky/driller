@@ -1,0 +1,8 @@
+{#- The breadcrumb. The body is the trail as the author wrote it, in Markdown.
+    The manifest declares `body: markdown`, so the body arrives between blank
+    lines: the `nav` raw-HTML block closes before it and the links render. The
+    class is the layout trail's, so both look alike. `data-canonical` is the
+    markup contract every conforming theme's breadcrumb carries. -#}
+<nav class="breadcrumbs" aria-label="Breadcrumb" data-canonical="breadcrumb">
+{{ body }}
+</nav>

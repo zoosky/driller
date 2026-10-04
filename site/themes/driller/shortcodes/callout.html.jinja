@@ -1,0 +1,27 @@
+{#- The callout, one of the canonical components.
+
+    `role="complementary"` and `aria-label` are the accessibility contract: the
+    box is an aside about the surrounding prose, and a screen reader announces
+    it by its title. The title is repeated as visible text because the label is
+    not rendered.
+
+    `data-canonical` and `data-part` are the markup contract: the landmarks
+    every conforming theme's callout carries, whatever its classes.
+
+    The manifest declares `body: markdown`, so the body arrives between blank
+    lines: the raw-HTML block the opening element starts closes before the
+    body, and the body reaches the markdown parser whole. Keep the closing tag
+    in column 0 -- after a blank line, an indented `</div>` is an indented
+    code block.
+-#}
+{%- set type = attrs.type | default("info") -%}
+{%- set title = attrs.title | default(type | capitalize) -%}
+{%- if attrs.collapsible -%}
+<details class="callout callout-{{ type }}" role="complementary" aria-label="{{ title }}" data-canonical="callout"><summary class="callout-title" data-part="title">{{ title }}</summary>
+{{ body }}
+</details>
+{%- else -%}
+<div class="callout callout-{{ type }}" role="complementary" aria-label="{{ title }}" data-canonical="callout"><p class="callout-title" data-part="title">{{ title }}</p>
+{{ body }}
+</div>
+{%- endif -%}

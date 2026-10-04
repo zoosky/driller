@@ -1,0 +1,23 @@
+# Component manifest for the card, one of the canonical components.
+#
+# A self-contained block of content: an optional image, a title that can link
+# somewhere, and a body. Every conforming theme implements `card` with the
+# `title`, `href` and `image` attributes.
+name: card
+description: A block of content with an optional image, a title, and a link.
+params:
+  - name: title
+    type: string
+    required: false
+    description: The card's heading.
+  - name: href
+    type: reference
+    required: false
+    description: Where the title links to.
+  - name: image
+    type: media
+    required: false
+    description: >-
+      An image shown above the title. It is decorative and carries no alt
+      text, so describe anything the reader needs in the body.
+body: markdown

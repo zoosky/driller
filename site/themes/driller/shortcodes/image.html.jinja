@@ -1,0 +1,5 @@
+{#- The image, as a figure so a caption stays attached to it. `src` goes
+    through `url()` so a sub-path install serves it with the prefix.
+    `data-canonical` and `data-part` are the markup contract every conforming
+    theme's image carries. -#}
+<figure class="image" data-canonical="image"><img data-part="image" src="{{ url(attrs.src) }}" alt="{{ attrs.alt }}" loading="lazy">{% if attrs.caption %}<figcaption data-part="caption">{{ attrs.caption }}</figcaption>{% endif %}</figure>

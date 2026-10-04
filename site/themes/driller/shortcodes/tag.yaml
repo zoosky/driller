@@ -1,0 +1,15 @@
+# Component manifest for the tag, one of the canonical components.
+#
+# A small label written inside a sentence, optionally a link. It is declared
+# `inline: true`, so it stays inside the paragraph, heading or list item it is
+# written in. Every conforming theme implements `tag` with the `href`
+# attribute.
+name: tag
+description: A small inline label, optionally a link.
+inline: true
+params:
+  - name: href
+    type: reference
+    required: false
+    description: Where the label links to.
+body: inline

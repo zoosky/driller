@@ -45,7 +45,10 @@ concurrency:
 env:
   # The Accent CMS release the site is built with. Bump deliberately, after
   # a local build with the new version.
-  ACCENT_VERSION: v0.25.1
+  ACCENT_VERSION: v0.26.0
+  # The installer that fetches and verifies that release (crates.io crate
+  # `accent`, binary `accentup`). The cache key below changes with it.
+  ACCENTUP_VERSION: "0.1.3"
   SITE_URL: https://zoosky.github.io/driller
 
 jobs:
@@ -55,29 +58,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The official installer downloads the release archive, checks its
-      # SHA-256 against the signed checksums file, and verifies that
-      # signature with the release key. With the require-verify flag a
-      # missing checksum, signature, or gpg fails the install instead of
-      # warning, which is what an unattended build wants.
+      # accentup downloads the release archive and verifies it in-process:
+      # the release signing key is compiled in, the signature check on the
+      # checksums file and the SHA-256 check of the archive run inside the
+      # binary, and there is no way to skip either. The job depends neither
+      # on the runner shipping gpg nor on an unpinned install script. It is
+      # built from crates.io with --locked at a pinned version and cached by
+      # that version, so only the first run pays for the compile.
+      - name: Restore accentup
+        id: accentup
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/accentup
+          key: accentup-${{ env.ACCENTUP_VERSION }}-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build accentup from crates.io
+        if: steps.accentup.outputs.cache-hit != 'true'
+        run: cargo install accent --locked --version "$ACCENTUP_VERSION"
+
       - name: Install Accent CMS
         run: |
-          curl -fsSL https://raw.githubusercontent.com/AccentCMS/accent/main/install.sh \
-            | ACCENT_VERSION="$ACCENT_VERSION" ACCENT_INSTALL_REQUIRE_VERIFY=1 sh
+          accentup install --version "$ACCENT_VERSION" --dir "$HOME/.local/bin"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       # The path component of --base-url makes every internal URL carry the
-      # /driller prefix the project site is served under. --strict-links
-      # fails the build on any internal link whose target is missing from
-      # the output, which covers links into the mounted repository files as
-      # well as the site's own pages.
+      # /driller prefix the project site is served under. The build fails on
+      # any internal link whose target is missing from the output, which
+      # covers links into the mounted repository files as well as the site's
+      # own pages.
       - name: Build
         run: |
           accent --version
           accent build --config site/config.yaml --clean \
             --output "$GITHUB_WORKSPACE/dist" \
-            --base-url "$SITE_URL" \
-            --strict-links
+            --base-url "$SITE_URL"
           test -f "$GITHUB_WORKSPACE/dist/index.html"
           test -f "$GITHUB_WORKSPACE/dist/404.html"
 

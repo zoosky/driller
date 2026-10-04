@@ -1,0 +1,26 @@
+# Component manifest for the button component.
+name: button
+description: A call-to-action link styled as a button.
+params:
+  - name: variant
+    type: enum
+    values: [default, primary, secondary]
+    required: false
+    description: Which button style to use. Defaults to default.
+  - name: href
+    type: reference
+    required: true
+    description: Where the button links to.
+# The body is the button's label. Spliced flush, it shares the line with the
+# `<a>` that opens it, so no raw HTML block starts and inline markdown in the
+# label renders; blank lines around it would turn the label into a paragraph
+# inside the link.
+body: inline
+# A button is written in a sentence as often as on a line of its own, and
+# `{% button %}Label{% /button %}` on one line is an inline placement. An
+# inline component is legitimate in both positions; a block one is reported
+# as misplaced when written in a line.
+inline: true
+# `[button primary href="/signup"]` wrote the variant as a bare word.
+migrate:
+  positional: [variant]

@@ -1,0 +1,12 @@
+{#- A call to action, styled as a button rather than a link.
+
+    `href` goes through `url()` so the link carries the deployment prefix on a
+    sub-path install, and so the slash stays literal: an autoescaped
+    `{{ attrs.href }}` emits `&#x2f;`, which is a valid link but a second
+    spelling for the base-path rewriter to know about.
+
+    `data-canonical` is the markup contract every conforming theme's button
+    carries.
+-#}
+{%- set variant = attrs.variant | default("default") -%}
+<a href="{{ url(attrs.href | default("#")) }}" class="btn btn-{{ variant }}" data-canonical="button">{{ body }}</a>

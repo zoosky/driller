@@ -1,0 +1,29 @@
+{#- The tab container.
+
+    Both loops read `children`, not `body`: by the time this template runs, the
+    body is one string of rendered markup and a label cannot be recovered from
+    it. `children` carries each `{% tab %}` with its attributes still resolved
+    and its own body separate, which is what makes the strip constructible.
+
+    The panels are emitted flush against each other -- no blank line between a
+    `</div>` and the next `<div` -- because a blank line would end the raw-HTML
+    block and the following panel would be read as markdown text. Each panel's
+    body arrives between blank lines of its own, because the `tab` manifest
+    declares `body: markdown`; that is what lets a panel's markdown render
+    inside its `<div>` while the panels themselves stay one HTML block.
+
+    `tabs.js` handles switching, group synchronisation, keyboard navigation and
+    persistence. The first tab is marked active here so the page is correct
+    before any script runs.
+
+    `data-canonical` and `data-part` are the markup contract every conforming
+    theme's tabs carry: the tab list, each tab and each panel.
+-#}
+{%- set group = attrs.group | default("default") -%}
+<div class="tabs" data-canonical="tabs" data-tab-group="{{ group }}"><div class="tabs-nav" role="tablist" data-part="tablist">
+{%- for c in children if c.name == "tab" %}{% set id = c.attrs.id | default(c.attrs.label | slugify) %}<button class="tabs-tab{{ " active" if loop.first else "" }}" role="tab" data-part="tab" aria-selected="{{ "true" if loop.first else "false" }}" data-tab="{{ id }}" aria-controls="tab-panel-{{ id }}">{{ c.attrs.label }}</button>{% endfor -%}
+</div>
+{%- for c in children if c.name == "tab" %}{% set id = c.attrs.id | default(c.attrs.label | slugify) %}<div class="tabs-panel{{ " active" if loop.first else "" }}" role="tabpanel" data-part="panel" id="tab-panel-{{ id }}">
+{{ c.body }}
+</div>{% endfor -%}
+</div>
