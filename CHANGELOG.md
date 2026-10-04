@@ -36,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged, and the public error API is identical (non-breaking). `thiserror`
   was already present transitively (via `reqwest`'s hickory-dns feature), so
   this adds no new crate to the build.
+- Refresh all dependencies to their latest semver-compatible releases
+  (`cargo update`; no `Cargo.toml` changes). Notable direct bumps: `tokio`
+  1.53.2, `reqwest` 0.13.5, `clap` 4.6.7, `regex` 1.13.1, `hdrhistogram` 7.6.0,
+  `rand` 0.10.3, `serde_json` 1.0.151, `thiserror` 2.0.21. This also replaces
+  the yanked `chacha20` 0.10.0 with 0.10.2, so `cargo audit` reports no
+  warnings.
 
 ### Security
 - Bump `h2` 0.4.14 -> 0.4.19 to clear RUSTSEC-2026-0258, in which the HTTP/2
@@ -45,6 +51,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   run whose target negotiates HTTP/2, so a hostile or malfunctioning target
   server could exhaust the load generator. Lockfile-only change; no driller
   source is affected.
+- Bump `rustls` 0.23.40 -> 0.23.45 to clear RUSTSEC-2026-0285, in which TLS 1.3
+  handshake messages were incorrectly accepted across encryption level
+  boundaries. `rustls` is driller's TLS stack for every `https://` target (via
+  `reqwest`), so a hostile target server could exercise the flaw during the
+  handshake. The fix also requires `rustls-webpki` 0.103.15 and `aws-lc-rs`
+  1.18.1 (`aws-lc-sys` 0.45.0, which adds `pkg-config` as a build dependency).
+  Lockfile-only change; no driller source is affected.
 
 ## [0.13.0] - 2026-07-03
 
