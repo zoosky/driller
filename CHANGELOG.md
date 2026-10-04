@@ -45,6 +45,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   run whose target negotiates HTTP/2, so a hostile or malfunctioning target
   server could exhaust the load generator. Lockfile-only change; no driller
   source is affected.
+- Bump `rustls` 0.23.40 -> 0.23.45 to clear RUSTSEC-2026-0285, in which TLS 1.3
+  handshake messages were incorrectly accepted across encryption level
+  boundaries. `rustls` is driller's TLS stack for every `https://` target (via
+  `reqwest`), so a hostile target server could exercise the flaw during the
+  handshake. The fix also requires `rustls-webpki` 0.103.15 and `aws-lc-rs`
+  1.18.1 (`aws-lc-sys` 0.45.0, which adds `pkg-config` as a build dependency).
+  Lockfile-only change; no driller source is affected.
 
 ## [0.13.0] - 2026-07-03
 
