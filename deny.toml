@@ -1,5 +1,13 @@
 [advisories]
-ignore = []
+ignore = [
+  # unsafe-libyaml is unmaintained (archived upstream); it reaches the tree only
+  # through serde_yaml 0.9, which parses benchmark plans. No patched release
+  # exists, and the advisory reports no vulnerability, only the lack of a
+  # maintainer. tests/serde_yaml_moat.rs pins the serde_yaml behaviour driller
+  # relies on so the parser can be swapped for a maintained crate; drop this
+  # entry when that happens.
+  { id = "RUSTSEC-2024-0449", reason = "unmaintained, no safe upgrade; pulled in by serde_yaml pending a parser swap" },
+]
 
 [licenses]
 allow = [
