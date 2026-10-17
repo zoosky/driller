@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Bump `rustls` 0.23.45 -> 0.23.46 to clear RUSTSEC-2026-0346 (`Debug` impls
+  for client session values expose TLS secrets), RUSTSEC-2026-0347 (buffered
+  application data sent to the outer server after ECH rejection),
+  RUSTSEC-2026-0348 (Brotli certificate decompression can allocate up to 1 GiB
+  before authentication) and RUSTSEC-2026-0349 (an unauthenticated ServerHello
+  can downgrade later connections to classical key exchange). `rustls` is
+  driller's TLS stack for every `https://` target (via `reqwest`); driller's
+  build does not enable the `brotli` certificate-compression feature.
+  Lockfile-only change; no driller source is affected.
+- `cargo deny` now ignores RUSTSEC-2024-0449, which flags `unsafe-libyaml` as
+  unmaintained. It reaches the build only through `serde_yaml`, which parses
+  benchmark plans; no patched release exists, and the advisory reports no
+  vulnerability. The entry in `deny.toml` is to be removed once `serde_yaml` is
+  replaced with a maintained YAML crate.
+
 ## [0.13.1] - 2026-10-04
 
 ### Added
