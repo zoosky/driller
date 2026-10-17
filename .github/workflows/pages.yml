@@ -45,7 +45,7 @@ concurrency:
 env:
   # The Accent CMS release the site is built with. Bump deliberately, after
   # a local build with the new version.
-  ACCENT_VERSION: v0.26.0
+  ACCENT_VERSION: v0.27.1
   # The installer that fetches and verifies that release (crates.io crate
   # `accent`, binary `accentup`). The cache key below changes with it.
   ACCENTUP_VERSION: "0.1.3"

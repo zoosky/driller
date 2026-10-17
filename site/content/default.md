@@ -17,7 +17,7 @@ cargo install driller
 driller run http://localhost:9000/api/users --stats
 ```
 
-{% button variant="primary" href="/docs/getting-started" %}Get started{% /button %}
+{% button variant="primary" href="docs/getting-started" %}Get started{% /button %}
 {% button href="https://github.com/zoosky/driller" %}Source on GitHub{% /button %}
 
 ---section: features---
@@ -81,4 +81,4 @@ Benchmark files written for the original `drill` run unchanged; see
 
 Install driller, write a first plan, and look up every flag.
 
-<a class="sc-button sc-button--primary" href="docs">Documentation</a>
+{% button variant="primary" href="docs" %}Documentation{% /button %}
