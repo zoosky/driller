@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-11-06
+
 ### Security
+- Bump `rustls-webpki` 0.103.15 -> 0.103.16 to clear RUSTSEC-2026-0382
+  (certificate verification may accept distrusted intermediates) and
+  `webpki-root-certs` 1.0.9 -> 1.0.11 to clear RUSTSEC-2026-0383 (bundled
+  root certificates allow trust in distrusted emSign intermediates). Both
+  sit on driller's certificate-verification path for every `https://`
+  target. The same `cargo update` refreshes all remaining lockfile
+  dependencies to their latest semver-compatible releases, including
+  `tokio` 1.54.1, which clears the RUSTSEC-2026-0386 unsoundness warning
+  (`AsyncFd::new` I/O-safety violation). Lockfile-only change; no driller
+  source is affected.
 - Bump `rustls` 0.23.45 -> 0.23.46 to clear RUSTSEC-2026-0346 (`Debug` impls
   for client session values expose TLS secrets), RUSTSEC-2026-0347 (buffered
   application data sent to the outer server after ECH rejection),
@@ -361,7 +373,8 @@ See [FORK.md](https://github.com/zoosky/driller/blob/main/FORK.md) for rationale
 - Benchmark YAML format and CLI flags are fully compatible with drill 0.9.0
 - Full upstream git history preserved
 
-[Unreleased]: https://github.com/zoosky/driller/compare/0.13.1...HEAD
+[Unreleased]: https://github.com/zoosky/driller/compare/0.13.2...HEAD
+[0.13.2]: https://github.com/zoosky/driller/compare/0.13.1...0.13.2
 [0.13.1]: https://github.com/zoosky/driller/compare/0.13.0...0.13.1
 [0.13.0]: https://github.com/zoosky/driller/compare/0.12.0...0.13.0
 [0.12.0]: https://github.com/zoosky/driller/compare/0.11.1...0.12.0
