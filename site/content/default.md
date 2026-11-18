@@ -17,7 +17,7 @@ cargo install driller
 driller run http://localhost:9000/api/users --stats
 ```
 
-{% button variant="primary" href="docs/getting-started" %}Get started{% /button %}
+{% button variant="primary" href="/docs/getting-started" %}Get started{% /button %}
 {% button href="https://github.com/zoosky/driller" %}Source on GitHub{% /button %}
 
 ---section: features---
@@ -73,7 +73,7 @@ driller run --benchmark benchmark.yml --stats
 ```
 
 Benchmark files written for the original `drill` run unchanged; see
-[Migrating from drill](docs/migrating-from-drill).
+[Migrating from drill](/docs/migrating-from-drill).
 
 ---section: cta---
 
@@ -81,4 +81,4 @@ Benchmark files written for the original `drill` run unchanged; see
 
 Install driller, write a first plan, and look up every flag.
 
-{% button variant="primary" href="docs" %}Documentation{% /button %}
+{% button variant="primary" href="/docs" %}Documentation{% /button %}
