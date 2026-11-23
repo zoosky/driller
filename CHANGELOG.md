@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Bump `url` 2.5.8 -> 2.5.9 to clear RUSTSEC-2026-0592 (stack overflow in
+  `Url::origin()` on nested `blob:` URLs). driller depends on `url`
+  directly, and through `reqwest`, `cookie_store`, `hickory-proto`, and
+  `tower-http`. The same update takes `form_urlencoded` 1.2.3, which
+  `url` 2.5.9 requires.
+
 ## [0.13.2] - 2026-11-06
 
 ### Security
