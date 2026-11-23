@@ -380,7 +380,8 @@ See [FORK.md](https://github.com/zoosky/driller/blob/main/FORK.md) for rationale
 - Benchmark YAML format and CLI flags are fully compatible with drill 0.9.0
 - Full upstream git history preserved
 
-[Unreleased]: https://github.com/zoosky/driller/compare/0.13.2...HEAD
+[Unreleased]: https://github.com/zoosky/driller/compare/0.13.3...HEAD
+[0.13.3]: https://github.com/zoosky/driller/compare/0.13.2...0.13.3
 [0.13.2]: https://github.com/zoosky/driller/compare/0.13.1...0.13.2
 [0.13.1]: https://github.com/zoosky/driller/compare/0.13.0...0.13.1
 [0.13.0]: https://github.com/zoosky/driller/compare/0.12.0...0.13.0
