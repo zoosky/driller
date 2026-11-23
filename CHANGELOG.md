@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Bump `cookie` 0.18.2 -> 0.18.3 to clear RUSTSEC-2026-0594 (private cookie
+  nonces can repeat in processes that fork). `cookie` reaches driller only
+  through `reqwest`'s cookie store, without the `private` feature, so the
+  affected `PrivateJar` functions are not compiled into driller, and driller
+  does not fork. Lockfile-only change; no driller source is affected.
+
 ## [0.13.3] - 2026-11-23
 
 ### Security
