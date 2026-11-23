@@ -7,15 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.13.3] - 2026-11-22
-
 ### Security
 - Bump `url` 2.5.8 -> 2.5.9 to clear RUSTSEC-2026-0592 (stack overflow in
-  `Url::origin()` on nested `blob:` URLs). driller parses request URLs with
-  `url` directly, and `reqwest`, `cookie_store` and the `hickory` DNS resolver
-  depend on it too; driller itself never calls `Url::origin()`. The same
-  targeted update moves `form_urlencoded` 1.2.2 -> 1.2.3. Lockfile-only change;
-  no driller source is affected.
+  `Url::origin()` on nested `blob:` URLs). driller depends on `url`
+  directly, and through `reqwest`, `cookie_store`, `hickory-proto`, and
+  `tower-http`. The same update takes `form_urlencoded` 1.2.3, which
+  `url` 2.5.9 requires.
 
 ## [0.13.2] - 2026-11-06
 
