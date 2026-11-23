@@ -79,7 +79,7 @@ To run the same build and link check as CI:
 
 ```sh
 accent build -c site/config.yaml --clean -o site/output \
-  --base-url https://zoosky.github.io/driller --strict-links
+  --base-url https://zoosky.github.io/driller
 accent serve-static --dir site/output --no-tls   # http://127.0.0.1:4403/driller
 ```
 
