@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.3] - 2026-11-23
+
 ### Security
 - Bump `url` 2.5.8 -> 2.5.9 to clear RUSTSEC-2026-0592 (stack overflow in
   `Url::origin()` on nested `blob:` URLs). driller depends on `url`
