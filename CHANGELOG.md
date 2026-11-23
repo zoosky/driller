@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.3] - 2026-11-22
+
+### Security
+- Bump `url` 2.5.8 -> 2.5.9 to clear RUSTSEC-2026-0592 (stack overflow in
+  `Url::origin()` on nested `blob:` URLs). driller parses request URLs with
+  `url` directly, and `reqwest`, `cookie_store` and the `hickory` DNS resolver
+  depend on it too; driller itself never calls `Url::origin()`. The same
+  targeted update moves `form_urlencoded` 1.2.2 -> 1.2.3. Lockfile-only change;
+  no driller source is affected.
+
 ## [0.13.2] - 2026-11-06
 
 ### Security
@@ -373,7 +383,8 @@ See [FORK.md](https://github.com/zoosky/driller/blob/main/FORK.md) for rationale
 - Benchmark YAML format and CLI flags are fully compatible with drill 0.9.0
 - Full upstream git history preserved
 
-[Unreleased]: https://github.com/zoosky/driller/compare/0.13.2...HEAD
+[Unreleased]: https://github.com/zoosky/driller/compare/0.13.3...HEAD
+[0.13.3]: https://github.com/zoosky/driller/compare/0.13.2...0.13.3
 [0.13.2]: https://github.com/zoosky/driller/compare/0.13.1...0.13.2
 [0.13.1]: https://github.com/zoosky/driller/compare/0.13.0...0.13.1
 [0.13.0]: https://github.com/zoosky/driller/compare/0.12.0...0.13.0
