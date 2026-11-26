@@ -58,6 +58,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML parse errors keep the `failed to parse YAML ...` prefix, but the text
   after it now comes from `noyalib` and is worded differently.
 
+### Fixed
+- The docs now give the license as GPL-3.0-only everywhere (README, FORK.md,
+  CONTRIBUTING.md, the website footer, and the fork-baseline changelog entry),
+  matching `Cargo.toml` and upstream drill, which declares `GPL-3.0`. They
+  previously said GPL-3.0-or-later. The license itself is unchanged.
+
 ## [0.13.4] - 2026-11-26
 
 ### Security
@@ -440,7 +446,7 @@ See [FORK.md](https://github.com/zoosky/driller/blob/main/FORK.md) for rationale
 - Local CI script (`local-ci.sh`)
 
 ### Unchanged
-- License remains GPL-3.0-or-later
+- License remains GPL-3.0-only
 - Benchmark YAML format and CLI flags are fully compatible with drill 0.9.0
 - Full upstream git history preserved
 

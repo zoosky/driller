@@ -1,7 +1,7 @@
 # Driller
 
 [![Crates.io](https://img.shields.io/crates/v/driller.svg)](https://crates.io/crates/driller)
-[![License: GPL-3.0](https://img.shields.io/crates/l/driller.svg)](./LICENSE)
+[![License: GPL-3.0-only](https://img.shields.io/crates/l/driller.svg)](./LICENSE)
 [![CI](https://github.com/zoosky/driller/actions/workflows/general.yml/badge.svg)](https://github.com/zoosky/driller/actions/workflows/general.yml)
 [![Documentation](https://img.shields.io/badge/docs-zoosky.github.io%2Fdriller-10b981)](https://zoosky.github.io/driller)
 
@@ -257,4 +257,4 @@ upstream and the goals of this fork.
 
 ## License
 
-GPL-3.0-or-later. See [LICENSE](./LICENSE) for the full text.
+GPL-3.0-only. See [LICENSE](./LICENSE) for the full text.

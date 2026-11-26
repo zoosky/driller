@@ -109,4 +109,4 @@ this step -- they build from a checkout (or receive `GITHUB_SHA` via
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under GPL-3.0, consistent with the project license.
+By contributing, you agree that your contributions will be licensed under GPL-3.0-only, consistent with the project license.
