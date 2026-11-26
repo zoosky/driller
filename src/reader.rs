@@ -107,7 +107,23 @@ pub fn read_yaml_doc_accessor<'a>(doc: &'a Value, accessor: Option<&str>) -> Res
       None => Err(Error::MissingNode(accessor_id.to_string())),
     }
   } else {
-    doc.as_sequence().ok_or_else(|| Error::NotASequence(format!("{doc:?}")))
+    doc.as_sequence().ok_or_else(|| Error::NotASequence(kind_of(doc).to_string()))
+  }
+}
+
+/// Names the kind of a YAML value for error messages ("a mapping", "a string").
+///
+/// Used instead of the value's `Debug` output, which dumps the whole document
+/// in the YAML crate's internal representation.
+fn kind_of(value: &Value) -> &'static str {
+  match value {
+    Value::Null => "null",
+    Value::Bool(_) => "a boolean",
+    Value::Number(_) => "a number",
+    Value::String(_) => "a string",
+    Value::Sequence(_) => "a sequence",
+    Value::Mapping(_) => "a mapping",
+    _ => "a tagged value",
   }
 }
 
@@ -176,4 +192,16 @@ pub fn read_csv_file_as_yml(filepath: &str, quote: u8) -> Result<Vec<Value>, Err
   }
 
   Ok(items)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn non_sequence_document_error_names_the_kind() {
+    let doc: Value = crate::yaml::from_str("base: http://localhost:9000\n").unwrap();
+    let err = read_yaml_doc_accessor(&doc, None).unwrap_err();
+    assert_eq!(err.to_string(), "expected document to be a sequence, got: a mapping");
+  }
 }

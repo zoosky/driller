@@ -128,6 +128,11 @@ impl Request {
     if let Some(mapping) = request_val.get("headers").and_then(|v| v.as_mapping()) {
       for (key, val) in mapping.iter() {
         // Mapping keys are always strings, so a key such as `1:` arrives as "1".
+        // A missing or null key (`: value`, `~:`, `null:`) arrives as "null";
+        // reject it rather than send a header literally named `null`.
+        if key == "null" {
+          panic!("{} Header names must not be empty or null!!", "WARNING!".yellow().bold());
+        }
         if let Some(vs) = val.as_str() {
           headers.insert(key.clone(), vs.to_string());
         } else {
@@ -501,11 +506,16 @@ fn charset_from_content_type(content_type: &str) -> Option<&str> {
 fn yaml_to_json(data: YamlValue) -> Value {
   match data {
     YamlValue::Bool(b) => json!(b),
-    YamlValue::Number(n) => match n.as_i64() {
-      Some(i) => json!(i),
-      // Floats, and unsigned integers above `i64::MAX`, become JSON floats.
-      None => json!(n.as_f64()),
-    },
+    YamlValue::Number(n) => {
+      if let Some(i) = n.as_i64() {
+        json!(i)
+      } else if let Some(u) = n.as_u64() {
+        // Unsigned integers above `i64::MAX` stay exact.
+        json!(u)
+      } else {
+        json!(n.as_f64())
+      }
+    }
     YamlValue::String(s) => json!(s),
     YamlValue::Mapping(m) => {
       let mut map = Map::new();
@@ -692,6 +702,20 @@ request:
       file_path
     );
     crate::yaml::from_str(&yaml_str).unwrap()
+  }
+
+  #[test]
+  #[should_panic(expected = "Header names must not be empty or null")]
+  fn empty_header_name_is_rejected() {
+    let yaml: YamlValue = crate::yaml::from_str("name: test_request\nrequest:\n  url: http://example.com\n  headers:\n    : application/json\n").unwrap();
+    Request::new(&yaml, None, None);
+  }
+
+  #[test]
+  #[should_panic(expected = "Header names must not be empty or null")]
+  fn null_header_name_is_rejected() {
+    let yaml: YamlValue = crate::yaml::from_str("name: test_request\nrequest:\n  url: http://example.com\n  headers:\n    ~: x\n").unwrap();
+    Request::new(&yaml, None, None);
   }
 
   #[test]

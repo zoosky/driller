@@ -15,22 +15,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dependency tree, so `cargo audit` no longer reports RUSTSEC-2024-0449
   (unmaintained), and the `deny.toml` ignore for it is gone. `noyalib` is pure
   Rust with no `unsafe` code. It is pinned exactly (`=0.0.64`) because every
-  `0.0.x` release is semver-incompatible.
+  `0.0.x` release is semver-incompatible. driller keeps the two parser limits
+  `serde_yaml` had (nesting depth 128, and the alias-expansion limit that stops
+  "billion laughs" files) and does not add `noyalib`'s other size limits, so
+  plans that reuse an anchor many times and large `--report` baselines read by
+  `--compare` load as before.
 
 ### Changed
 - **Breaking (library):** the YAML types in driller's public API now come from
   `noyalib`. The new `driller::yaml` module re-exports them (`Value`,
-  `Mapping`, `Number`, `Error`, `from_str`, `to_string`), and
-  `driller::Error::Yaml` carries a `driller::yaml::Error`. Code that passed
-  `serde_yaml::Value`s into driller should switch to `driller::yaml::Value`.
-  The CLI and the plan file format are unchanged.
-- YAML mapping keys are now always strings. A header key that YAML reads as a
-  number or boolean (for example `1:`) is sent as the header name `1` instead
-  of stopping the run with "Header keys must be strings". In `with_items`
-  entries, such keys are now kept as strings for `{{ item.* }}` interpolation
-  (`1: one` becomes the key `"1"`) instead of being silently dropped.
-- `--list-tasks` prints nested lists indented under their key (`  - tag1`
-  instead of `- tag1`). Items are still separated by a blank line.
+  `Mapping`, `Number`, `Sequence`, `Tag`, `TaggedValue`, `Location`, `Error`,
+  `from_str`, `to_string`), and `driller::Error::Yaml` carries a
+  `driller::yaml::Error`. Code that passed `serde_yaml::Value`s into driller
+  should switch to `driller::yaml::Value`.
+- **YAML mapping keys are now always strings, in a standard form.** Plans that
+  use ordinary string keys, as plans normally do, are not affected.
+  - Number, boolean and null keys are rewritten: `1:` and `+1:` become `1`,
+    `0x10:` becomes `16`, `1e3:` becomes `1000.0`, `true:` becomes `true`, and
+    `~:`, `null:` or an empty key (`: value`) become `null`. Keys that are
+    already strings, such as `01:` or `yes:`, stay as written.
+  - A plan with two keys that end up as the same string (`1:` next to `"1":`,
+    or `1:` next to `+1:`) no longer loads: parsing fails with a
+    key-collision or duplicate-key error. So does a list or mapping used as a
+    key (`? [a, b]`), even in a part of the file driller ignores.
+  - A header name that YAML reads as a number or boolean is sent in that form
+    (`1:` as header `1`) instead of stopping the run with "Header keys must be
+    strings". An empty or null header name now stops the run with "Header
+    names must not be empty or null".
+  - In `with_items` entries, such keys are kept for `{{ item.* }}`
+    interpolation (`1: one` becomes the key `"1"`) instead of being dropped, so
+    a body template that renders a whole entry, such as `body: '{{ item }}'`,
+    now includes them.
+- `{{ item.* }}` keeps unsigned integers above `i64::MAX` exact instead of
+  turning them into floats (`18446744073709551615`, not
+  `1.8446744073709552e19`).
+- `--list-tasks` indents nested lists under their key (`  - tag1` instead of
+  `- tag1`) and quotes strings with double quotes (`"123"` instead of
+  `'123'`). Items are still separated by a blank line.
+- Error and panic messages that used to dump a YAML value's internal debug form
+  now describe it: a non-sequence document reports `got: a mapping`, and an
+  unsupported node shows the value as YAML.
 - YAML parse errors keep the `failed to parse YAML ...` prefix, but the text
   after it now comes from `noyalib` and is worded differently.
 

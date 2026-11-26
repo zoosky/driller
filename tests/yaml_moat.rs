@@ -419,10 +419,15 @@ mod yaml_to_json_bridge {
   fn yaml_to_json(data: Value) -> JsonValue {
     match data {
       Value::Bool(b) => json!(b),
-      Value::Number(n) => match n.as_i64() {
-        Some(i) => json!(i),
-        None => json!(n.as_f64()),
-      },
+      Value::Number(n) => {
+        if let Some(i) = n.as_i64() {
+          json!(i)
+        } else if let Some(u) = n.as_u64() {
+          json!(u)
+        } else {
+          json!(n.as_f64())
+        }
+      }
       Value::String(s) => json!(s),
       Value::Mapping(m) => {
         let mut map = Map::new();
@@ -474,5 +479,148 @@ mod yaml_to_json_bridge {
     let yaml: Value = yaml::from_str("1: one\ntwo: 2\n").unwrap();
     let got = yaml_to_json(yaml);
     assert_eq!(got, json!({ "1": "one", "two": 2 }));
+  }
+
+  #[test]
+  fn unsigned_integer_above_i64_max_stays_exact() {
+    // mirrors: yaml_to_json's as_u64 branch. serde_yaml 0.9 (and driller before
+    // 0.14.0) turned this into the float 1.8446744073709552e19.
+    let yaml: Value = yaml::from_str("id: 18446744073709551615\n").unwrap();
+    assert_eq!(yaml_to_json(yaml).to_string(), r#"{"id":18446744073709551615}"#);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mapping keys: string-only, in a standard form
+//
+// mirrors: every `.get("key")` lookup, the request.rs header loop and
+// yaml_to_json. serde_yaml 0.9 kept non-string keys as `Value`s; noyalib turns
+// every scalar key into a string and rejects the cases that would collide.
+// ---------------------------------------------------------------------------
+mod key_handling {
+  use super::*;
+
+  fn first_key(src: &str) -> String {
+    let v: Value = yaml::from_str(src).unwrap();
+    v.as_mapping().unwrap().keys().next().unwrap().clone()
+  }
+
+  #[test]
+  fn scalar_keys_become_strings_in_standard_form() {
+    // serde_yaml 0.9 kept these as Number / Bool / Null keys.
+    assert_eq!(first_key("1: a"), "1");
+    assert_eq!(first_key("+1: a"), "1");
+    assert_eq!(first_key("0x10: a"), "16");
+    assert_eq!(first_key("1e3: a"), "1000.0");
+    assert_eq!(first_key("true: a"), "true");
+    // Strings stay as written.
+    assert_eq!(first_key("01: a"), "01");
+    assert_eq!(first_key("yes: a"), "yes");
+  }
+
+  #[test]
+  fn empty_and_null_keys_become_null() {
+    // mirrors: the request.rs header guard, which rejects a "null" header name.
+    // serde_yaml 0.9 read `~:`/`NULL:` as a Null key and failed to parse `: a`.
+    assert_eq!(first_key("~: a"), "null");
+    assert_eq!(first_key("NULL: a"), "null");
+    assert_eq!(first_key("\"null\": a"), "null");
+    let v: Value = yaml::from_str("headers:\n  : application/json\n").unwrap();
+    assert_eq!(v["headers"].as_mapping().unwrap().keys().next().map(String::as_str), Some("null"));
+  }
+
+  #[test]
+  fn keys_that_collide_as_strings_are_a_parse_error() {
+    // serde_yaml 0.9 accepted both as distinct keys.
+    let err = yaml::from_str::<Value>("1: a\n\"1\": b\n").unwrap_err();
+    assert!(err.to_string().contains("collide"), "{err}");
+    assert!(yaml::from_str::<Value>("true: a\n\"true\": b\n").is_err());
+    assert!(yaml::from_str::<Value>("1: a\n+1: b\n").is_err());
+  }
+
+  #[test]
+  fn non_scalar_keys_are_a_parse_error() {
+    // serde_yaml 0.9 accepted sequences and mappings as keys.
+    assert!(yaml::from_str::<Value>("[x, y]: a\n").is_err());
+    assert!(yaml::from_str::<Value>("{x: 1}: a\n").is_err());
+    assert!(yaml::from_str::<Value>("? [a, b]\n: c\n").is_err());
+  }
+
+  #[test]
+  fn duplicate_keys_are_a_parse_error() {
+    // Same as serde_yaml 0.9 for Value targets.
+    let err = yaml::from_str::<Value>("a: 1\na: 2\n").unwrap_err();
+    assert!(err.to_string().contains("duplicate"), "{err}");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Parser limits
+//
+// mirrors: src/yaml.rs `parser_config`, used by every parse (plans, CSV-free
+// with_items lists, and src/checker.rs reading `--report` baselines for
+// `--compare`). serde_yaml 0.9 enforced only nesting depth and the alias
+// expansion factor; noyalib's other default budgets would reject real input.
+// ---------------------------------------------------------------------------
+mod limits {
+  use super::*;
+
+  #[test]
+  fn anchor_reused_many_times_parses() {
+    // noyalib's default alias/anchor ratio (10) rejected the 11th use.
+    let mut src = String::from("h: &h {Accept: application/json}\nplan:\n");
+    for i in 0..1_000 {
+      src.push_str(&format!("  - name: r{i}\n    request: {{url: /x, headers: *h}}\n"));
+    }
+    let v: Value = yaml::from_str(&src).unwrap();
+    assert_eq!(v["plan"].as_sequence().unwrap().len(), 1_000);
+    assert_eq!(v["plan"][999]["request"]["headers"]["Accept"].as_str(), Some("application/json"));
+  }
+
+  #[test]
+  fn large_report_file_parses() {
+    // mirrors: --compare reading a --report baseline. noyalib's default
+    // max_nodes (250,000) rejected reports from runs of about 35,700 requests.
+    let mut src = String::new();
+    for i in 0..100_000 {
+      src.push_str(&format!("- name: r{i}\n  duration: 1.5\n  status: 200\n"));
+    }
+    let v: Value = yaml::from_str(&src).unwrap();
+    assert_eq!(v.as_sequence().unwrap().len(), 100_000);
+  }
+
+  #[test]
+  fn long_inline_list_parses() {
+    // noyalib's default max_sequence_length (65,536) rejected this.
+    let mut src = String::from("with_items:\n");
+    for i in 0..70_000 {
+      src.push_str(&format!("  - {i}\n"));
+    }
+    let v: Value = yaml::from_str(&src).unwrap();
+    assert_eq!(v["with_items"].as_sequence().unwrap().len(), 70_000);
+  }
+
+  #[test]
+  fn billion_laughs_is_still_rejected() {
+    // The alias expansion factor serde_yaml 0.9 used stays in place.
+    let mut src = String::from("a: &a [lol, lol, lol, lol, lol, lol, lol, lol, lol]\n");
+    let mut prev = "a";
+    for name in ["b", "c", "d", "e", "f", "g", "h", "i"] {
+      let refs = vec![format!("*{prev}"); 9].join(", ");
+      src.push_str(&format!("{name}: &{name} [{refs}]\n"));
+      prev = name;
+    }
+    let err = yaml::from_str::<Value>(&src).unwrap_err();
+    assert!(err.to_string().contains("repetition limit exceeded"), "{err}");
+  }
+
+  #[test]
+  fn nesting_deeper_than_128_is_rejected() {
+    // Same depth limit as serde_yaml 0.9.
+    let ok = format!("{}1{}", "[".repeat(100), "]".repeat(100));
+    assert!(yaml::from_str::<Value>(&ok).is_ok());
+    let deep = format!("{}1{}", "[".repeat(200), "]".repeat(200));
+    let err = yaml::from_str::<Value>(&deep).unwrap_err();
+    assert!(err.to_string().contains("recursion limit exceeded"), "{err}");
   }
 }

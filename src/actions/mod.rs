@@ -60,6 +60,7 @@ pub fn extract<'a>(item: &'a Value, attr: &'a str) -> String {
   } else if item.get(attr).and_then(|v| v.as_mapping()).is_some() {
     panic!("`{attr}` is required needs to be a string. Try adding quotes");
   } else {
-    panic!("Unknown node `{}` => {:?}", attr, item.get(attr));
+    let shown = item.get(attr).map(|v| crate::yaml::to_string(v).unwrap_or_default()).unwrap_or_else(|| "(missing)".to_string());
+    panic!("Unknown node `{attr}` => {shown}");
   }
 }
