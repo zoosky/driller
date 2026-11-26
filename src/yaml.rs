@@ -19,8 +19,17 @@
 //!   `~:`, `null:` or an empty key (`: value`) is `"null"`.
 //! - Two keys that become the same string (`1:` and `"1":`) are a parse error,
 //!   and so is a sequence or mapping used as a key.
-//! - [`to_string`] output has no trailing newline and indents sequence items
-//!   under their key.
+//! - Tags are removed when a document is parsed into a [`Value`]: `url: !path
+//!   /x` reads as the string `/x`, and `!!binary` / `!!timestamp` values as
+//!   their text, which is what `serde_yaml`'s accessors returned.
+//! - A multi-line quoted string or flow collection must indent its
+//!   continuation lines deeper than the key it belongs to. `serde_yaml`
+//!   (libyaml) also accepted a closing `}'` or `]` at the key's own indent;
+//!   noyalib rejects it. Indent the continuation, or use a block scalar
+//!   (`body: |`).
+//! - [`to_string`] output usually has no trailing newline (a value that ends
+//!   in a block scalar keeps its newline) and indents sequence items under
+//!   their key.
 //!
 //! # Limits
 //!
@@ -52,13 +61,18 @@
 //! [`crate::Error::Yaml`] together with the parse context.
 
 pub use noyalib::compat::serde_yaml::{Error, Location, Mapping, Number, Sequence, Tag, TaggedValue, Value, to_string};
+use std::any::{Any, TypeId};
+
 use noyalib::{DuplicateKeyPolicy, ParserConfig};
 
 /// Parses a YAML document into `T` (driller always uses [`Value`]).
 ///
 /// This is `noyalib`'s `serde_yaml`-compatible parse, with the limits described
 /// in the [module docs](self): `serde_yaml`'s depth and alias-expansion limits
-/// stay, noyalib's extra size budgets are lifted.
+/// stay, noyalib's extra size budgets are lifted. For a [`Value`] target, tags
+/// are removed from the whole tree and duplicate keys are an error. Other
+/// targets keep noyalib's compatibility behaviour (the last duplicate wins, as
+/// in `serde_yaml`).
 ///
 /// # Examples
 ///
@@ -76,22 +90,29 @@ use noyalib::{DuplicateKeyPolicy, ParserConfig};
 ///
 /// # Errors
 ///
-/// Returns an [`Error`] for malformed YAML, duplicate or colliding keys,
-/// non-scalar keys, nesting deeper than 128 levels, or runaway alias expansion.
+/// Returns an [`Error`] for malformed YAML, duplicate (for [`Value`]) or
+/// colliding keys, non-scalar keys, nesting deeper than 128 levels, or runaway
+/// alias expansion.
 pub fn from_str<T>(s: &str) -> Result<T, Error>
 where
   T: serde::de::DeserializeOwned + 'static,
 {
-  noyalib::from_str_with_config(s, &parser_config()).map_err(|e| Error::from_noyalib_with_input(e, s))
+  if TypeId::of::<T>() == TypeId::of::<Value>() {
+    let value: Value = noyalib::from_str_with_config(s, &parser_config(true)).map_err(|e| Error::from_noyalib_with_input(e, s))?;
+    let untagged: Box<dyn Any> = Box::new(value.untag());
+    return Ok(*untagged.downcast::<T>().expect("T is Value, checked by TypeId above"));
+  }
+  noyalib::from_str_with_config(s, &parser_config(false)).map_err(|e| Error::from_noyalib_with_input(e, s))
 }
 
 /// The parser configuration behind [`from_str`].
 ///
 /// Starts from noyalib's `serde_yaml` compatibility profile (scalar resolution,
 /// error shape, depth 128 and the 100-jumps-per-event alias rule) and removes
-/// the budgets `serde_yaml` never had. Duplicate keys stay an error, as they
-/// were for `serde_yaml::Value`.
-fn parser_config() -> ParserConfig {
+/// the budgets `serde_yaml` never had. With `value_target`, duplicate keys are
+/// an error, as they were for `serde_yaml::Value`; otherwise the profile's own
+/// policy applies.
+fn parser_config(value_target: bool) -> ParserConfig {
   let base = ParserConfig::serde_yaml_compat();
   let mut limits = base.limits();
   limits.max_document_length = usize::MAX;
@@ -106,6 +127,8 @@ fn parser_config() -> ParserConfig {
   limits.max_merge_keys = usize::MAX;
   limits.alias_anchor_ratio = None;
   let mut config = base.with_limits(limits);
-  config.duplicate_key_policy = DuplicateKeyPolicy::Error;
+  if value_target {
+    config.duplicate_key_policy = DuplicateKeyPolicy::Error;
+  }
   config
 }

@@ -13,14 +13,16 @@ Documentation: **[zoosky.github.io/driller](https://zoosky.github.io/driller)**
 ## Quick start
 
 ```bash
-cargo install driller
+cargo install driller            # or: brew install zoosky/tap/driller
 
 driller run http://localhost:9000/api/users --stats
 driller run --benchmark benchmark.yml --stats
 ```
 
 Or grab a binary from the
-[latest release](https://github.com/zoosky/driller/releases/latest).
+[latest release](https://github.com/zoosky/driller/releases/latest). The Homebrew
+formula installs those release binaries on macOS (Apple silicon and Intel) and
+Linux x86_64.
 
 ## Example
 
@@ -212,17 +214,12 @@ cargo build --release
 ./target/release/driller --benchmark benchmark.yml --stats
 ```
 
-### OpenSSL dependency
+### TLS
 
-Driller links against OpenSSL for TLS. Install the development headers for
-your platform:
-
-| Platform | Command |
-|---|---|
-| Debian / Ubuntu | `apt install libssl-dev pkg-config` |
-| Fedora / RHEL | `dnf install openssl-devel` |
-| macOS (Homebrew) | `brew install openssl` |
-| Windows (vcpkg) | `vcpkg install openssl:x64-windows-static-md` |
+Driller uses [rustls](https://github.com/rustls/rustls) for TLS and does not
+link OpenSSL, so no OpenSSL development headers are needed. Building from
+source compiles rustls' bundled cryptography library (aws-lc), which needs a C
+compiler.
 
 ## Testing locally
 

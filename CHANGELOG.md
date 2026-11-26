@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-11-26
+
+### Fixed
+- YAML tags no longer break plans. Since 0.14.0, a tagged value such as
+  `url: !path /x` stopped the run with ``Unknown node `url` ...``, a tagged
+  `with_items` entry panicked with "Unknown Yaml node" when its request ran,
+  and tagged `tags:` entries were ignored. Tags are now removed when a plan is
+  parsed: `!path /x` reads as `/x`, and `!!binary` / `!!timestamp` values read
+  as their text, as they did before 0.14.0. `--list-tasks` shows the untagged
+  value.
+- A header name that is empty (`"": value`) or contains characters not allowed
+  in a header name (such as a space) now stops the run before any request is
+  sent, with "Invalid header name ...". Before, it passed and then panicked
+  inside a worker on the first request. This replaces 0.14.0's "Header names
+  must not be empty or null" message and also covers `: value` and `~:`.
+- Duplicate-key parse errors say where the duplicate is again (`duplicate entry
+  with key "url" at line 6 column 7`).
+- `driller::yaml::from_str` rejects duplicate keys only for `Value` targets.
+  Other targets, such as a `HashMap`, keep the last entry, as `serde_yaml` did.
+- The README and the getting-started guide no longer say driller links
+  OpenSSL. TLS uses rustls; no OpenSSL headers are needed to build from source
+  (a C compiler is, for rustls' bundled cryptography library).
+
+### Changed
+- **Plan format, since 0.14.0:** a multi-line quoted string or inline list
+  must indent its continuation lines deeper than its key. A JSON body written
+  as `body: '{` ... `}'` with the closing `}'` lined up under `body:`, or a
+  `with_items: [` list whose items line up with the key, fails to parse with
+  "continuation must be indented more than the parent block" or "flow content
+  must be indented more than the surrounding block". driller 0.13 and earlier
+  accepted these. Indent the continuation lines, or write the body as a block
+  scalar (`body: |`); `SYNTAX.md` shows an example. This comes from the YAML
+  parser and cannot be switched off in driller.
+
+### Added
+- Homebrew: `brew install zoosky/tap/driller` installs the release binaries on
+  macOS (Apple silicon and Intel) and Linux x86_64.
+
 ## [0.14.0] - 2026-11-26
 
 ### Security
@@ -450,7 +488,8 @@ See [FORK.md](https://github.com/zoosky/driller/blob/main/FORK.md) for rationale
 - Benchmark YAML format and CLI flags are fully compatible with drill 0.9.0
 - Full upstream git history preserved
 
-[Unreleased]: https://github.com/zoosky/driller/compare/0.14.0...HEAD
+[Unreleased]: https://github.com/zoosky/driller/compare/0.14.1...HEAD
+[0.14.1]: https://github.com/zoosky/driller/compare/0.14.0...0.14.1
 [0.14.0]: https://github.com/zoosky/driller/compare/0.13.4...0.14.0
 [0.13.4]: https://github.com/zoosky/driller/compare/0.13.3...0.13.4
 [0.13.3]: https://github.com/zoosky/driller/compare/0.13.2...0.13.3

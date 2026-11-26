@@ -38,7 +38,7 @@ pub enum Error {
   /// A YAML document failed to parse. `what` distinguishes the parse context
   /// (`"document"` for one record of a multi-document file, `"content"` for the
   /// whole file).
-  #[error("failed to parse YAML {what}: {source}")]
+  #[error("failed to parse YAML {what}: {}", yaml_message(source))]
   Yaml {
     /// The parse context, used in the message.
     what: &'static str,
@@ -58,7 +58,7 @@ pub enum Error {
   #[error("node missing on config: {0}")]
   MissingNode(String),
   /// A document expected to be a sequence of items was something else; carries
-  /// a debug rendering of what was found.
+  /// the kind of value found (for example `a mapping`).
   #[error("expected document to be a sequence, got: {0}")]
   NotASequence(String),
   /// The expanded plan contained no runnable items.
@@ -82,6 +82,20 @@ pub enum Error {
   /// non-zero exit code.
   #[error("{0} request(s) slower than the baseline")]
   Regressions(usize),
+}
+
+/// Formats a YAML parse error for [`Error::Yaml`], adding the position when
+/// the YAML crate's own message does not include one.
+///
+/// Most noyalib messages already end in `at line L column C`. Some, such as
+/// duplicate keys, keep the position only in [`crate::yaml::Error::location`];
+/// without it a user cannot find the duplicate in a large plan.
+fn yaml_message(source: &crate::yaml::Error) -> String {
+  let message = source.to_string();
+  match source.location() {
+    Some(location) if !message.contains(" at line ") => format!("{message} at line {} column {}", location.line(), location.column()),
+    _ => message,
+  }
 }
 
 #[cfg(test)]

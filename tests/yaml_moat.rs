@@ -333,6 +333,14 @@ mod serialization {
   }
 
   #[test]
+  fn to_string_keeps_the_newline_of_a_closing_block_scalar() {
+    // A value ending in a block scalar keeps its newline, so callers that add
+    // their own separator (src/tags.rs) trim it first.
+    let v: Value = yaml::from_str("x: |\n  line1\n  line2\n").unwrap();
+    assert!(yaml::to_string(&v).unwrap().ends_with("line2\n"));
+  }
+
+  #[test]
   fn parse_serialize_round_trip_is_stable() {
     // A second parse+serialize must be a fixed point.
     let src = "a: 1\nb:\n- x\n- y\n";
@@ -548,9 +556,100 @@ mod key_handling {
 
   #[test]
   fn duplicate_keys_are_a_parse_error() {
-    // Same as serde_yaml 0.9 for Value targets.
+    // Same as serde_yaml 0.9 for Value targets. The position is kept in
+    // `location()` (src/error.rs adds it to the message driller prints).
     let err = yaml::from_str::<Value>("a: 1\na: 2\n").unwrap_err();
     assert!(err.to_string().contains("duplicate"), "{err}");
+    let location = err.location().expect("duplicate-key error has a location");
+    assert_eq!((location.line(), location.column()), (2, 1));
+  }
+
+  #[test]
+  fn duplicate_keys_keep_the_last_entry_for_map_targets() {
+    // serde_yaml 0.9 kept the last entry for non-Value targets; so does
+    // driller::yaml::from_str. Only Value targets reject duplicates.
+    let map: std::collections::HashMap<String, i32> = yaml::from_str("a: 1\na: 2\n").unwrap();
+    assert_eq!(map.get("a"), Some(&2));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tags
+//
+// mirrors: every accessor driller calls on plan values (`as_str`, `as_i64`,
+// `as_mapping`, `as_sequence`, ...), extract() in src/actions/mod.rs and
+// yaml_to_json. serde_yaml 0.9's accessors looked through tags and it read
+// `!!binary` / `!!timestamp` as plain strings; driller::yaml::from_str removes
+// tags so the same accessors keep working.
+// ---------------------------------------------------------------------------
+mod tags {
+  use super::*;
+
+  #[test]
+  fn custom_tag_on_a_scalar_reads_as_the_scalar() {
+    let v: Value = yaml::from_str("url: !path /x\n").unwrap();
+    assert_eq!(v["url"].as_str(), Some("/x"));
+  }
+
+  #[test]
+  fn binary_and_timestamp_read_as_their_text() {
+    let v: Value = yaml::from_str("b: !!binary aGVsbG8=\nt: !!timestamp 2001-12-14\n").unwrap();
+    assert_eq!(v["b"].as_str(), Some("aGVsbG8="));
+    assert_eq!(v["t"].as_str(), Some("2001-12-14"));
+  }
+
+  #[test]
+  fn tags_are_removed_inside_collections() {
+    let v: Value = yaml::from_str("with_items:\n  - !item {id: 1}\n  - !!timestamp 2001-12-14\ntags: !list [a, b]\n").unwrap();
+    assert_eq!(v["with_items"][0]["id"].as_i64(), Some(1));
+    assert_eq!(v["with_items"][1].as_str(), Some("2001-12-14"));
+    assert_eq!(v["tags"].as_sequence().map(Vec::len), Some(2));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Multi-line flow scalars and collections: continuation indentation
+//
+// mirrors: plan bodies written as multi-line quoted JSON, and inline
+// `with_items: [...]` lists. serde_yaml 0.9 (libyaml) accepted a continuation
+// line at the parent key's indent; noyalib rejects it and has no setting to
+// relax this. These goldens pin both sides, so a noyalib change shows up here.
+// ---------------------------------------------------------------------------
+mod continuation_indentation {
+  use super::*;
+
+  #[test]
+  fn quoted_continuation_at_the_parent_indent_is_rejected() {
+    // serde_yaml 0.9 parsed this to `{ "a": 1 }`.
+    let src = "request:\n  body: '{\n    \"a\": 1\n  }'\n";
+    let err = yaml::from_str::<Value>(src).unwrap_err();
+    assert!(err.to_string().contains("continuation must be indented more than the parent block"), "{err}");
+    let double = "request:\n  body: \"{\n    a: 1\n  }\"\n";
+    assert!(yaml::from_str::<Value>(double).is_err());
+  }
+
+  #[test]
+  fn quoted_continuation_indented_deeper_parses() {
+    let src = "request:\n  body: '{\n    \"a\": 1\n    }'\n";
+    let v: Value = yaml::from_str(src).unwrap();
+    assert_eq!(v["request"]["body"].as_str(), Some("{ \"a\": 1 }"));
+  }
+
+  #[test]
+  fn block_scalar_body_parses() {
+    let src = "request:\n  body: |\n    {\"a\": 1}\n";
+    let v: Value = yaml::from_str(src).unwrap();
+    assert_eq!(v["request"]["body"].as_str(), Some("{\"a\": 1}\n"));
+  }
+
+  #[test]
+  fn flow_list_items_at_the_parent_indent_are_rejected() {
+    // serde_yaml 0.9 parsed this to a two-item list.
+    let src = "with_items: [\n{id: 1},\n{id: 2}\n]\n";
+    assert!(yaml::from_str::<Value>(src).is_err());
+    let indented = "with_items: [\n  {id: 1},\n  {id: 2}\n  ]\n";
+    let v: Value = yaml::from_str(indented).unwrap();
+    assert_eq!(v["with_items"].as_sequence().map(Vec::len), Some(2));
   }
 }
 

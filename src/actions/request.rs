@@ -128,10 +128,12 @@ impl Request {
     if let Some(mapping) = request_val.get("headers").and_then(|v| v.as_mapping()) {
       for (key, val) in mapping.iter() {
         // Mapping keys are always strings, so a key such as `1:` arrives as "1".
-        // A missing or null key (`: value`, `~:`, `null:`) arrives as "null";
-        // reject it rather than send a header literally named `null`.
-        if key == "null" {
-          panic!("{} Header names must not be empty or null!!", "WARNING!".yellow().bold());
+        // A missing or null key (`: value`, `~:`, `null:`) arrives as "null".
+        // Header names are not interpolated, so validate each one here: a null,
+        // empty or otherwise invalid name stops the run before any request is
+        // sent, instead of panicking inside a worker mid-load.
+        if key == "null" || HeaderName::from_bytes(key.as_bytes()).is_err() {
+          panic!("{} Invalid header name {key:?}: header names must be non-empty, not null, and use only token characters!!", "WARNING!".yellow().bold());
         }
         if let Some(vs) = val.as_str() {
           headers.insert(key.clone(), vs.to_string());
@@ -705,17 +707,38 @@ request:
   }
 
   #[test]
-  #[should_panic(expected = "Header names must not be empty or null")]
+  #[should_panic(expected = "Invalid header name")]
   fn empty_header_name_is_rejected() {
     let yaml: YamlValue = crate::yaml::from_str("name: test_request\nrequest:\n  url: http://example.com\n  headers:\n    : application/json\n").unwrap();
     Request::new(&yaml, None, None);
   }
 
   #[test]
-  #[should_panic(expected = "Header names must not be empty or null")]
+  #[should_panic(expected = "Invalid header name")]
   fn null_header_name_is_rejected() {
     let yaml: YamlValue = crate::yaml::from_str("name: test_request\nrequest:\n  url: http://example.com\n  headers:\n    ~: x\n").unwrap();
     Request::new(&yaml, None, None);
+  }
+
+  #[test]
+  #[should_panic(expected = "Invalid header name \"\"")]
+  fn explicitly_empty_header_name_is_rejected() {
+    let yaml: YamlValue = crate::yaml::from_str("name: test_request\nrequest:\n  url: http://example.com\n  headers:\n    \"\": application/json\n").unwrap();
+    Request::new(&yaml, None, None);
+  }
+
+  #[test]
+  #[should_panic(expected = "Invalid header name \"X Trace\"")]
+  fn header_name_with_a_space_is_rejected() {
+    let yaml: YamlValue = crate::yaml::from_str("name: test_request\nrequest:\n  url: http://example.com\n  headers:\n    X Trace: abc\n").unwrap();
+    Request::new(&yaml, None, None);
+  }
+
+  #[test]
+  fn tagged_url_is_read_through_its_tag() {
+    let yaml: YamlValue = crate::yaml::from_str("name: test_request\nrequest:\n  url: !path http://example.com/x\n").unwrap();
+    let request = Request::new(&yaml, None, None);
+    assert_eq!(request.url, "http://example.com/x");
   }
 
   #[test]
