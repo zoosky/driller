@@ -132,8 +132,11 @@ impl Request {
         // Header names are not interpolated, so validate each one here: a null,
         // empty or otherwise invalid name stops the run before any request is
         // sent, instead of panicking inside a worker mid-load.
-        if key == "null" || HeaderName::from_bytes(key.as_bytes()).is_err() {
-          panic!("{} Invalid header name {key:?}: header names must be non-empty, not null, and use only token characters!!", "WARNING!".yellow().bold());
+        if key == "null" {
+          panic!("{} Header name is empty or null!!", "WARNING!".yellow().bold());
+        }
+        if HeaderName::from_bytes(key.as_bytes()).is_err() {
+          panic!("{} Invalid header name {key:?}: header names must be non-empty and use only token characters!!", "WARNING!".yellow().bold());
         }
         if let Some(vs) = val.as_str() {
           headers.insert(key.clone(), vs.to_string());
@@ -707,14 +710,14 @@ request:
   }
 
   #[test]
-  #[should_panic(expected = "Invalid header name")]
+  #[should_panic(expected = "Header name is empty or null")]
   fn empty_header_name_is_rejected() {
     let yaml: YamlValue = crate::yaml::from_str("name: test_request\nrequest:\n  url: http://example.com\n  headers:\n    : application/json\n").unwrap();
     Request::new(&yaml, None, None);
   }
 
   #[test]
-  #[should_panic(expected = "Invalid header name")]
+  #[should_panic(expected = "Header name is empty or null")]
   fn null_header_name_is_rejected() {
     let yaml: YamlValue = crate::yaml::from_str("name: test_request\nrequest:\n  url: http://example.com\n  headers:\n    ~: x\n").unwrap();
     Request::new(&yaml, None, None);

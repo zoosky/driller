@@ -17,15 +17,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   parsed: `!path /x` reads as `/x`, and `!!binary` / `!!timestamp` values read
   as their text, as they did before 0.14.0. `--list-tasks` shows the untagged
   value.
-- A header name that is empty (`"": value`) or contains characters not allowed
-  in a header name (such as a space) now stops the run before any request is
-  sent, with "Invalid header name ...". Before, it passed and then panicked
-  inside a worker on the first request. This replaces 0.14.0's "Header names
-  must not be empty or null" message and also covers `: value` and `~:`.
+- Header names are checked when the plan is loaded, so a bad one stops the run
+  before any request is sent instead of panicking inside a worker on the first
+  request. A missing or null name (`: value`, `~:`) reports "Header name is
+  empty or null"; an explicitly empty name (`"": value`) or one with characters
+  not allowed in a header name (such as a space) reports "Invalid header name
+  ...".
 - Duplicate-key parse errors say where the duplicate is again (`duplicate entry
-  with key "url" at line 6 column 7`).
-- `driller::yaml::from_str` rejects duplicate keys only for `Value` targets.
-  Other targets, such as a `HashMap`, keep the last entry, as `serde_yaml` did.
+  with key "url" at line 6 column 7`), and every YAML error position now counts
+  lines from the top of the file. Plans that start with `---` or contain
+  several documents used to report lines too low.
+- `driller::yaml::from_str` handles typed targets the way `serde_yaml` did: a
+  repeated struct field is an error and a `HashMap` keeps the last entry
+  (0.14.0 rejected every duplicate). `Value` and `Mapping` results still reject
+  duplicates and have their tags removed; tags inside other targets are kept.
 - The README and the getting-started guide no longer say driller links
   OpenSSL. TLS uses rustls; no OpenSSL headers are needed to build from source
   (a C compiler is, for rustls' bundled cryptography library).

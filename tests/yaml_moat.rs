@@ -565,11 +565,31 @@ mod key_handling {
   }
 
   #[test]
-  fn duplicate_keys_keep_the_last_entry_for_map_targets() {
-    // serde_yaml 0.9 kept the last entry for non-Value targets; so does
-    // driller::yaml::from_str. Only Value targets reject duplicates.
+  fn duplicate_keys_keep_the_last_entry_for_hashmap_targets() {
+    // serde_yaml 0.9 kept the last entry for typed map targets; so does
+    // driller::yaml::from_str.
     let map: std::collections::HashMap<String, i32> = yaml::from_str("a: 1\na: 2\n").unwrap();
     assert_eq!(map.get("a"), Some(&2));
+  }
+
+  #[test]
+  fn duplicate_struct_field_is_an_error() {
+    // serde_yaml 0.9: `duplicate field `a``.
+    #[derive(Debug, serde::Deserialize)]
+    #[allow(dead_code)]
+    struct S {
+      a: i32,
+    }
+    let err = yaml::from_str::<S>("a: 1\na: 2\n").unwrap_err();
+    assert!(err.to_string().contains("duplicate field"), "{err}");
+  }
+
+  #[test]
+  fn mapping_target_rejects_duplicates_and_removes_tags() {
+    // Mapping is handled like Value (serde_yaml 0.9 rejected duplicates for both).
+    assert!(yaml::from_str::<Mapping>("a: 1\na: 2\n").is_err());
+    let m: Mapping = yaml::from_str("url: !path /x\n").unwrap();
+    assert_eq!(m.get("url").and_then(|v| v.as_str()), Some("/x"));
   }
 }
 
@@ -596,6 +616,14 @@ mod tags {
     let v: Value = yaml::from_str("b: !!binary aGVsbG8=\nt: !!timestamp 2001-12-14\n").unwrap();
     assert_eq!(v["b"].as_str(), Some("aGVsbG8="));
     assert_eq!(v["t"].as_str(), Some("2001-12-14"));
+  }
+
+  #[test]
+  fn tags_inside_other_targets_are_kept() {
+    // Only Value and Mapping targets are untagged; a Vec<Value> keeps them.
+    let v: Vec<Value> = yaml::from_str("- !path /x\n").unwrap();
+    assert!(v[0].is_tagged());
+    assert_eq!(v[0].as_str(), None);
   }
 
   #[test]

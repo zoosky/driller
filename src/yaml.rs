@@ -67,12 +67,16 @@ use noyalib::{DuplicateKeyPolicy, ParserConfig};
 
 /// Parses a YAML document into `T` (driller always uses [`Value`]).
 ///
-/// This is `noyalib`'s `serde_yaml`-compatible parse, with the limits described
-/// in the [module docs](self): `serde_yaml`'s depth and alias-expansion limits
-/// stay, noyalib's extra size budgets are lifted. For a [`Value`] target, tags
-/// are removed from the whole tree and duplicate keys are an error. Other
-/// targets keep noyalib's compatibility behaviour (the last duplicate wins, as
-/// in `serde_yaml`).
+/// For [`Value`] and [`Mapping`] targets this is `noyalib`'s
+/// `serde_yaml`-compatible parse with the limits described in the
+/// [module docs](self) (`serde_yaml`'s depth and alias-expansion limits stay,
+/// noyalib's extra size budgets are lifted); duplicate keys are an error and
+/// tags are removed from the whole tree.
+///
+/// Any other target (a struct, a `HashMap`, a `Vec<Value>`, ...) goes through
+/// `noyalib::compat::serde_yaml::from_str` unchanged: a repeated struct field
+/// is an error and a map keeps the last duplicate, as in `serde_yaml`, but
+/// noyalib's default size budgets apply and tags inside the result are kept.
 ///
 /// # Examples
 ///
@@ -86,33 +90,49 @@ use noyalib::{DuplicateKeyPolicy, ParserConfig};
 /// }
 /// let doc: Value = yaml::from_str(&src).unwrap();
 /// assert_eq!(doc["plan"][49]["headers"]["Accept"].as_str(), Some("application/json"));
+///
+/// // Tags are removed, so accessors see the tagged scalar.
+/// let doc: Value = yaml::from_str("url: !path /x").unwrap();
+/// assert_eq!(doc["url"].as_str(), Some("/x"));
 /// ```
 ///
 /// # Errors
 ///
-/// Returns an [`Error`] for malformed YAML, duplicate (for [`Value`]) or
-/// colliding keys, non-scalar keys, nesting deeper than 128 levels, or runaway
-/// alias expansion.
+/// Returns an [`Error`] for malformed YAML, duplicate or colliding keys,
+/// non-scalar keys, nesting deeper than 128 levels, or runaway alias expansion.
 pub fn from_str<T>(s: &str) -> Result<T, Error>
 where
   T: serde::de::DeserializeOwned + 'static,
 {
-  if TypeId::of::<T>() == TypeId::of::<Value>() {
-    let value: Value = noyalib::from_str_with_config(s, &parser_config(true)).map_err(|e| Error::from_noyalib_with_input(e, s))?;
-    let untagged: Box<dyn Any> = Box::new(value.untag());
-    return Ok(*untagged.downcast::<T>().expect("T is Value, checked by TypeId above"));
+  let target = TypeId::of::<T>();
+  if target != TypeId::of::<Value>() && target != TypeId::of::<Mapping>() {
+    return noyalib::compat::serde_yaml::from_str(s);
   }
-  noyalib::from_str_with_config(s, &parser_config(false)).map_err(|e| Error::from_noyalib_with_input(e, s))
+  let value: Value = noyalib::from_str_with_config(s, &parser_config()).map_err(|e| Error::from_noyalib_with_input(e, s))?;
+  // A tag needs a `!` somewhere in the text; skip the rebuild otherwise.
+  let value = if s.contains('!') {
+    value.untag()
+  } else {
+    value
+  };
+  let parsed: Box<dyn Any> = if target == TypeId::of::<Value>() {
+    Box::new(value)
+  } else {
+    match value {
+      Value::Mapping(mapping) => Box::new(mapping),
+      other => return noyalib::compat::serde_yaml::from_value(other),
+    }
+  };
+  Ok(*parsed.downcast::<T>().expect("T is Value or Mapping, checked by TypeId above"))
 }
 
 /// The parser configuration behind [`from_str`].
 ///
 /// Starts from noyalib's `serde_yaml` compatibility profile (scalar resolution,
 /// error shape, depth 128 and the 100-jumps-per-event alias rule) and removes
-/// the budgets `serde_yaml` never had. With `value_target`, duplicate keys are
-/// an error, as they were for `serde_yaml::Value`; otherwise the profile's own
-/// policy applies.
-fn parser_config(value_target: bool) -> ParserConfig {
+/// the budgets `serde_yaml` never had. Duplicate keys are an error, as they
+/// were for `serde_yaml::Value` and `serde_yaml::Mapping`.
+fn parser_config() -> ParserConfig {
   let base = ParserConfig::serde_yaml_compat();
   let mut limits = base.limits();
   limits.max_document_length = usize::MAX;
@@ -127,8 +147,6 @@ fn parser_config(value_target: bool) -> ParserConfig {
   limits.max_merge_keys = usize::MAX;
   limits.alias_anchor_ratio = None;
   let mut config = base.with_limits(limits);
-  if value_target {
-    config.duplicate_key_policy = DuplicateKeyPolicy::Error;
-  }
+  config.duplicate_key_policy = DuplicateKeyPolicy::Error;
   config
 }

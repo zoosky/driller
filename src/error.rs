@@ -92,9 +92,18 @@ pub enum Error {
 /// without it a user cannot find the duplicate in a large plan.
 fn yaml_message(source: &crate::yaml::Error) -> String {
   let message = source.to_string();
-  match source.location() {
-    Some(location) if !message.contains(" at line ") => format!("{message} at line {} column {}", location.line(), location.column()),
-    _ => message,
+  let Some(location) = source.location() else {
+    return message;
+  };
+  let (line, column) = (location.line(), location.column());
+  // noyalib ends a positioned message with "line L column C" (or "line L,
+  // column C"). Check the end only: key text quoted inside the message can
+  // itself contain "at line".
+  let positioned = message.ends_with(&format!("line {line} column {column}")) || message.ends_with(&format!("line {line}, column {column}"));
+  if positioned {
+    message
+  } else {
+    format!("{message} at line {line} column {column}")
   }
 }
 
@@ -102,6 +111,36 @@ fn yaml_message(source: &crate::yaml::Error) -> String {
 mod tests {
   use super::Error;
   use std::error::Error as _;
+
+  #[test]
+  fn yaml_error_gets_a_position_when_the_message_has_none() {
+    let source = crate::yaml::from_str::<crate::yaml::Value>("a: 1\na: 2\n").unwrap_err();
+    let err = Error::Yaml {
+      what: "content",
+      source,
+    };
+    assert_eq!(err.to_string(), "failed to parse YAML content: duplicate entry with key \"a\" at line 2 column 1");
+  }
+
+  #[test]
+  fn key_text_containing_at_line_does_not_hide_the_position() {
+    let source = crate::yaml::from_str::<crate::yaml::Value>("\"x at line 9\": 1\n\"x at line 9\": 2\n").unwrap_err();
+    let err = Error::Yaml {
+      what: "content",
+      source,
+    };
+    assert!(err.to_string().ends_with("at line 2 column 1"), "{err}");
+  }
+
+  #[test]
+  fn yaml_error_that_already_has_a_position_is_not_repeated() {
+    let source = crate::yaml::from_str::<crate::yaml::Value>("1: x\n\"1\": y\n").unwrap_err();
+    let err = Error::Yaml {
+      what: "content",
+      source,
+    };
+    assert_eq!(err.to_string().matches("line ").count(), 1, "{err}");
+  }
 
   /// The context-free variants render byte-for-byte the strings the CLI and
   /// tests depend on.

@@ -51,10 +51,7 @@ fn parse_yaml_content(content: &str) -> Result<Vec<Value>, Error> {
       let trimmed = doc_str.trim();
       // Skip empty parts and parts that are only comments
       if !trimmed.is_empty() && !trimmed.chars().all(|c| c == '#' || c.is_whitespace() || c == '\n') {
-        let doc = crate::yaml::from_str::<Value>(trimmed).map_err(|source| Error::Yaml {
-          what: "document",
-          source,
-        })?;
+        let doc = parse_chunk(content, trimmed, "document")?;
         // Skip Null documents (which can result from comments-only content)
         if !matches!(doc, Value::Null) {
           docs.push(doc);
@@ -67,10 +64,7 @@ fn parse_yaml_content(content: &str) -> Result<Vec<Value>, Error> {
   if docs.is_empty() {
     // Remove leading "---\n" if present for single-document files
     let content_to_parse = trimmed_content.strip_prefix("---\n").unwrap_or(trimmed_content);
-    let doc = crate::yaml::from_str::<Value>(content_to_parse.trim()).map_err(|source| Error::Yaml {
-      what: "content",
-      source,
-    })?;
+    let doc = parse_chunk(content, content_to_parse.trim(), "content")?;
     if !matches!(doc, Value::Null) {
       docs.push(doc);
     }
@@ -109,6 +103,30 @@ pub fn read_yaml_doc_accessor<'a>(doc: &'a Value, accessor: Option<&str>) -> Res
   } else {
     doc.as_sequence().ok_or_else(|| Error::NotASequence(kind_of(doc).to_string()))
   }
+}
+
+/// Parses `chunk`, a slice of `content`, so that error positions count lines
+/// from the start of the whole file.
+///
+/// [`parse_yaml_content`] trims the file, drops a leading `---` and splits
+/// multi-document input before parsing, so the YAML parser only sees part of
+/// the text. Padding the chunk with the newlines that came before it keeps the
+/// reported line numbers pointing at the right line of the file. Leading blank
+/// lines do not change what a YAML document means.
+fn parse_chunk(content: &str, chunk: &str, what: &'static str) -> Result<Value, Error> {
+  let offset = (chunk.as_ptr() as usize).saturating_sub(content.as_ptr() as usize).min(content.len());
+  let lines_before = content.get(..offset).map_or(0, |prefix| prefix.matches('\n').count());
+  let padded;
+  let text = if lines_before == 0 {
+    chunk
+  } else {
+    padded = format!("{}{chunk}", "\n".repeat(lines_before));
+    padded.as_str()
+  };
+  crate::yaml::from_str::<Value>(text).map_err(|source| Error::Yaml {
+    what,
+    source,
+  })
 }
 
 /// Names the kind of a YAML value for error messages ("a mapping", "a string").
@@ -197,6 +215,18 @@ pub fn read_csv_file_as_yml(filepath: &str, quote: u8) -> Result<Vec<Value>, Err
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn error_positions_count_from_the_start_of_the_file() {
+    // A leading `---` and a second document must not shift reported lines.
+    let single = "---\nbase: http://localhost:9000\nplan:\n  - name: dup\n    request:\n      url: /a\n      url: /b\n";
+    let err = parse_yaml_content(single).unwrap_err();
+    assert!(err.to_string().ends_with("at line 7 column 7"), "{err}");
+
+    let multi = "---\nfirst: 1\n---\nplan:\n  - name: dup\n    request:\n      url: /a\n      url: /b\n";
+    let err = parse_yaml_content(multi).unwrap_err();
+    assert!(err.to_string().ends_with("at line 8 column 7"), "{err}");
+  }
 
   #[test]
   fn non_sequence_document_error_names_the_kind() {
