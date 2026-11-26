@@ -5,7 +5,7 @@ mod multi_file_request;
 mod multi_iter_request;
 mod multi_request;
 
-use serde_yaml::Value;
+use crate::yaml::Value;
 
 pub fn pick(item: &Value, with_items: &[Value]) -> usize {
   match item.get("pick").and_then(|v| v.as_i64()) {

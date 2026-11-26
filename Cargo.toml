@@ -1,6 +1,6 @@
 [package]
 name = "driller"
-version = "0.13.4"
+version = "0.14.0"
 authors = ["Ferran Basora <fcsonline@gmail.com>", "Andreas Kapp <zoosky@gmail.com>"]
 description = "A clean HTTP load-test drill. Ansible-style YAML plans, Rust runtime, RPS and percentiles per run -- no fancy bits."
 repository = "https://github.com/zoosky/driller"
@@ -36,7 +36,10 @@ csv = "1.0.5"
 regex = "1.5.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.39"
-serde_yaml = "0.9"
+# Exact pin: noyalib is 0.0.x, where every release is semver-incompatible.
+# Same features as its own `noyalib-serde-yaml` facade. Upgrade deliberately
+# and run `cargo test --test yaml_moat`.
+noyalib = { version = "=0.0.64", default-features = false, features = ["std", "compat-serde-yaml"] }
 url = "2.1.1"
 linked-hash-map = "0.5.3"
 tokio = { version = "1.43.1", features = ["time", "net", "rt", "rt-multi-thread"] }

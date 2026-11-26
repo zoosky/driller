@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-26
+
+### Security
+- Benchmark plans are now parsed with [`noyalib`](https://crates.io/crates/noyalib)
+  instead of the archived `serde_yaml` 0.9. That drops `unsafe-libyaml` from the
+  dependency tree, so `cargo audit` no longer reports RUSTSEC-2024-0449
+  (unmaintained), and the `deny.toml` ignore for it is gone. `noyalib` is pure
+  Rust with no `unsafe` code. It is pinned exactly (`=0.0.64`) because every
+  `0.0.x` release is semver-incompatible.
+
+### Changed
+- **Breaking (library):** the YAML types in driller's public API now come from
+  `noyalib`. The new `driller::yaml` module re-exports them (`Value`,
+  `Mapping`, `Number`, `Error`, `from_str`, `to_string`), and
+  `driller::Error::Yaml` carries a `driller::yaml::Error`. Code that passed
+  `serde_yaml::Value`s into driller should switch to `driller::yaml::Value`.
+  The CLI and the plan file format are unchanged.
+- YAML mapping keys are now always strings. A header key that YAML reads as a
+  number or boolean (for example `1:`) is sent as the header name `1` instead
+  of stopping the run with "Header keys must be strings". In `with_items`
+  entries, such keys are now kept as strings for `{{ item.* }}` interpolation
+  (`1: one` becomes the key `"1"`) instead of being silently dropped.
+- `--list-tasks` prints nested lists indented under their key (`  - tag1`
+  instead of `- tag1`). Items are still separated by a blank line.
+- YAML parse errors keep the `failed to parse YAML ...` prefix, but the text
+  after it now comes from `noyalib` and is worded differently.
+
 ## [0.13.4] - 2026-11-26
 
 ### Security
@@ -393,7 +420,8 @@ See [FORK.md](https://github.com/zoosky/driller/blob/main/FORK.md) for rationale
 - Benchmark YAML format and CLI flags are fully compatible with drill 0.9.0
 - Full upstream git history preserved
 
-[Unreleased]: https://github.com/zoosky/driller/compare/0.13.4...HEAD
+[Unreleased]: https://github.com/zoosky/driller/compare/0.14.0...HEAD
+[0.14.0]: https://github.com/zoosky/driller/compare/0.13.4...0.14.0
 [0.13.4]: https://github.com/zoosky/driller/compare/0.13.3...0.13.4
 [0.13.3]: https://github.com/zoosky/driller/compare/0.13.2...0.13.3
 [0.13.2]: https://github.com/zoosky/driller/compare/0.13.1...0.13.2

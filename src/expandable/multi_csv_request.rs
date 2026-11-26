@@ -1,6 +1,6 @@
+use crate::yaml::Value;
 use rand::rng;
 use rand::seq::SliceRandom;
-use serde_yaml::Value;
 use std::path::Path;
 
 use super::pick;

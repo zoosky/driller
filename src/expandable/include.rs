@@ -1,4 +1,4 @@
-use serde_yaml::Value;
+use crate::yaml::Value;
 use std::path::Path;
 
 use crate::interpolator::INTERPOLATION_REGEX;
@@ -74,7 +74,7 @@ pub fn expand_from_filepath(parent_path: &str, benchmark: &mut Benchmark, access
     } else if actions::Request::is_that_you(item) {
       benchmark.push(Box::new(actions::Request::new(item, None, None)));
     } else {
-      let out_str = serde_yaml::to_string(item).unwrap();
+      let out_str = crate::yaml::to_string(item).unwrap();
       panic!("Unknown node:\n\n{out_str}\n\n");
     }
   }

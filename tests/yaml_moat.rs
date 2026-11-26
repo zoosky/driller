@@ -1,11 +1,15 @@
-//! Characterization ("moat") tests for every way driller uses `serde_yaml`.
+//! Characterization ("moat") tests for every way driller uses YAML.
 //!
-//! `serde_yaml` (`= "0.9"`) is archived upstream. These tests pin the exact
-//! behaviour the current version gives so that a future swap to a replacement
-//! crate becomes a readable list of concrete diffs instead of a silent
-//! behavioural migration. They characterise *the library*, not driller's
-//! wrapper functions, so they survive refactors of `src/` and isolate the
-//! dependency boundary.
+//! driller reads plans through `driller::yaml`, its single YAML boundary, which
+//! re-exports `noyalib`'s `serde_yaml`-compatible API. These tests pin the exact
+//! behaviour that boundary gives, so swapping the YAML crate becomes a readable
+//! list of concrete diffs instead of a silent behavioural migration. They
+//! characterise *the library*, not driller's wrapper functions, so they survive
+//! refactors of `src/` and isolate the dependency boundary.
+//!
+//! The suite was first captured against `serde_yaml` 0.9. Where `noyalib`
+//! behaves differently, the test asserts the current behaviour and a comment
+//! records what `serde_yaml` 0.9 did.
 //!
 //! Each test carries a `mirrors:` comment naming the driller call site whose
 //! behaviour it protects. A failure here points directly at the code that
@@ -13,9 +17,9 @@
 //!
 //! ## Running the moat against a replacement candidate
 //!
-//! 1. Re-point the `serde_yaml` name at the candidate in `Cargo.toml`, e.g.
-//!    `serde_yaml = { package = "serde_yaml_ng", version = "0.10" }`.
-//! 2. `cargo test --test serde_yaml_moat`.
+//! 1. Point `src/yaml.rs` at the candidate's API and swap the dependency in
+//!    `Cargo.toml`.
+//! 2. `cargo test --test yaml_moat`.
 //! 3. Each failure is a behavioural difference. Either absorb it in driller's
 //!    code or reject the candidate.
 //! 4. A green suite means the swap is behaviour-preserving for everything
@@ -25,7 +29,7 @@
 //! `Result` shape) on purpose: a "compatible but different" crate must trip a
 //! specific, legible failure rather than slip through a loose `is_some()`.
 
-use serde_yaml::{Mapping, Number, Value};
+use driller::yaml::{self, Mapping, Number, Value};
 
 // ---------------------------------------------------------------------------
 // Scalar parsing + coercion accessors
@@ -40,7 +44,7 @@ mod scalars {
   fn parses_integer_as_i64_not_str() {
     // mirrors: read_i64_configuration — an int scalar must coerce via as_i64,
     // and must NOT masquerade as a string (the code branches on that).
-    let v: Value = serde_yaml::from_str("42").unwrap();
+    let v: Value = yaml::from_str("42").unwrap();
     assert_eq!(v.as_i64(), Some(42));
     assert_eq!(v.as_str(), None);
     assert_eq!(v.as_f64(), Some(42.0));
@@ -51,7 +55,7 @@ mod scalars {
   fn parses_negative_integer() {
     // mirrors: read_i64_configuration — negative values are detected and
     // rejected by driller, so the sign must round-trip through as_i64.
-    let v: Value = serde_yaml::from_str("-7").unwrap();
+    let v: Value = yaml::from_str("-7").unwrap();
     assert_eq!(v.as_i64(), Some(-7));
   }
 
@@ -59,7 +63,7 @@ mod scalars {
   fn parses_float_as_f64_not_i64() {
     // mirrors: yaml_to_json (request.rs) — Number is probed as_i64 first, then
     // as_f64. A float must fail as_i64 and succeed as_f64.
-    let v: Value = serde_yaml::from_str("3.5").unwrap();
+    let v: Value = yaml::from_str("3.5").unwrap();
     assert_eq!(v.as_i64(), None);
     assert_eq!(v.as_f64(), Some(3.5));
   }
@@ -67,13 +71,13 @@ mod scalars {
   #[test]
   fn parses_bool() {
     // mirrors: multi_request.rs / multi_iter_request.rs `shuffle` and `pick`.
-    let t: Value = serde_yaml::from_str("true").unwrap();
-    let f: Value = serde_yaml::from_str("false").unwrap();
+    let t: Value = yaml::from_str("true").unwrap();
+    let f: Value = yaml::from_str("false").unwrap();
     assert_eq!(t.as_bool(), Some(true));
     assert_eq!(f.as_bool(), Some(false));
     // A bare `yes`/`no` must NOT be a bool under YAML 1.2 (serde_yaml 0.9
     // semantics); driller relies on explicit true/false.
-    let yes: Value = serde_yaml::from_str("yes").unwrap();
+    let yes: Value = yaml::from_str("yes").unwrap();
     assert_eq!(yes.as_bool(), None);
     assert_eq!(yes.as_str(), Some("yes"));
   }
@@ -81,8 +85,8 @@ mod scalars {
   #[test]
   fn parses_bare_and_quoted_string() {
     // mirrors: read_str_configuration (config.rs) and the url/body accessors.
-    let bare: Value = serde_yaml::from_str("hello").unwrap();
-    let quoted: Value = serde_yaml::from_str("\"hello\"").unwrap();
+    let bare: Value = yaml::from_str("hello").unwrap();
+    let quoted: Value = yaml::from_str("\"hello\"").unwrap();
     assert_eq!(bare.as_str(), Some("hello"));
     assert_eq!(quoted.as_str(), Some("hello"));
   }
@@ -91,7 +95,7 @@ mod scalars {
   fn numeric_string_when_quoted_stays_string() {
     // mirrors: read_i64_configuration — a quoted number is a string and is
     // routed through the interpolate-then-parse branch, not as_i64.
-    let v: Value = serde_yaml::from_str("\"42\"").unwrap();
+    let v: Value = yaml::from_str("\"42\"").unwrap();
     assert_eq!(v.as_i64(), None);
     assert_eq!(v.as_str(), Some("42"));
   }
@@ -108,15 +112,15 @@ mod nulls {
 
   #[test]
   fn tilde_and_null_keyword_parse_to_null() {
-    assert!(matches!(serde_yaml::from_str::<Value>("~").unwrap(), Value::Null));
-    assert!(matches!(serde_yaml::from_str::<Value>("null").unwrap(), Value::Null));
+    assert!(matches!(yaml::from_str::<Value>("~").unwrap(), Value::Null));
+    assert!(matches!(yaml::from_str::<Value>("null").unwrap(), Value::Null));
   }
 
   #[test]
   fn empty_input_parses_to_null() {
     // mirrors: parse_yaml_content — an empty file must parse to Null (Ok), not
     // an error, so the reader can fall back to a single Null document.
-    let v: Value = serde_yaml::from_str("").unwrap();
+    let v: Value = yaml::from_str("").unwrap();
     assert!(matches!(v, Value::Null));
   }
 
@@ -124,7 +128,7 @@ mod nulls {
   fn comment_only_input_parses_to_null() {
     // mirrors: parse_yaml_content — comment-only parts are skipped because
     // they parse to Null.
-    let v: Value = serde_yaml::from_str("# just a comment").unwrap();
+    let v: Value = yaml::from_str("# just a comment").unwrap();
     assert!(matches!(v, Value::Null));
   }
 }
@@ -140,7 +144,7 @@ mod mappings {
   use super::*;
 
   fn doc() -> Value {
-    serde_yaml::from_str("name: foo\nrequest:\n  url: /api\n  body:\n    file: payload.json\nassert:\n  key: status\n  value: 200\n").unwrap()
+    yaml::from_str("name: foo\nrequest:\n  url: /api\n  body:\n    file: payload.json\nassert:\n  key: status\n  value: 200\n").unwrap()
   }
 
   #[test]
@@ -197,7 +201,7 @@ mod sequences {
   fn as_sequence_and_filter_map_as_str() {
     // mirrors: tags.rs should_skip_item — item.get("tags").as_sequence() then
     // iter().filter_map(|t| t.as_str()).
-    let d: Value = serde_yaml::from_str("tags:\n  - tag1\n  - tag2\n  - 3\n").unwrap();
+    let d: Value = yaml::from_str("tags:\n  - tag1\n  - tag2\n  - 3\n").unwrap();
     let seq = d.get("tags").and_then(|v| v.as_sequence()).unwrap();
     let strs: Vec<&str> = seq.iter().filter_map(|t| t.as_str()).collect();
     // The integer `3` is filtered out by as_str returning None — exactly the
@@ -209,14 +213,14 @@ mod sequences {
   fn as_sequence_none_on_mapping() {
     // mirrors: read_yaml_doc_accessor — a non-sequence node must yield None so
     // the reader can `die` with a clear message.
-    let d: Value = serde_yaml::from_str("plan:\n  not: a-sequence\n").unwrap();
+    let d: Value = yaml::from_str("plan:\n  not: a-sequence\n").unwrap();
     assert!(d.get("plan").and_then(|v| v.as_sequence()).is_none());
   }
 
   #[test]
   fn top_level_sequence() {
     // mirrors: read_yaml_doc_accessor with accessor=None — doc.as_sequence().
-    let d: Value = serde_yaml::from_str("- a\n- b\n").unwrap();
+    let d: Value = yaml::from_str("- a\n- b\n").unwrap();
     let seq = d.as_sequence().unwrap();
     assert_eq!(seq.len(), 2);
     assert_eq!(seq[0].as_str(), Some("a"));
@@ -224,11 +228,12 @@ mod sequences {
 }
 
 // ---------------------------------------------------------------------------
-// Mapping construction + keyed lookup by Value (programmatic build)
+// Mapping construction + keyed lookup (programmatic build)
 //
 // mirrors: src/reader.rs `read_csv_file_as_yml` (Mapping::new + insert +
-// Value::Mapping) and src/expandable/multi_iter_request.rs (get by a
-// Value::String key, Number::from).
+// Value::Mapping) and src/expandable/multi_iter_request.rs (get by a string
+// key, Number::from). Mapping keys are strings; serde_yaml 0.9 keyed mappings
+// by `Value`.
 // ---------------------------------------------------------------------------
 mod construction {
   use super::*;
@@ -237,8 +242,8 @@ mod construction {
   fn build_mapping_like_csv_reader() {
     // mirrors: read_csv_file_as_yml — headers + record become a Value::Mapping.
     let mut mapping = Mapping::new();
-    mapping.insert(Value::String("id".to_string()), Value::String("1".to_string()));
-    mapping.insert(Value::String("name".to_string()), Value::String("ada".to_string()));
+    mapping.insert("id", Value::String("1".to_string()));
+    mapping.insert("name", Value::String("ada".to_string()));
     let row = Value::Mapping(mapping);
 
     assert_eq!(row.get("id").and_then(|v| v.as_str()), Some("1"));
@@ -246,14 +251,13 @@ mod construction {
   }
 
   #[test]
-  fn keyed_get_by_value_string() {
-    // mirrors: multi_iter_request.rs — with_iter_items.get(&Value::String(..)).
-    let m: Value = serde_yaml::from_str("start: 2\nstep: 2\nstop: 20\n").unwrap();
+  fn keyed_get_by_str() {
+    // mirrors: multi_iter_request.rs — with_iter_items.get("step").
+    // serde_yaml 0.9 looked the key up as `&Value::String("step")`.
+    let m: Value = yaml::from_str("start: 2\nstep: 2\nstop: 20\n").unwrap();
     let mapping = m.as_mapping().unwrap();
-    let key = Value::String("step".into());
-    assert_eq!(mapping.get(&key).and_then(|v| v.as_i64()), Some(2));
-    let missing = Value::String("nope".into());
-    assert!(mapping.get(&missing).is_none());
+    assert_eq!(mapping.get("step").and_then(|v| v.as_i64()), Some(2));
+    assert!(mapping.get("nope").is_none());
   }
 
   #[test]
@@ -277,10 +281,10 @@ mod ordering {
 
   #[test]
   fn mapping_preserves_insertion_order() {
-    // Keys are deliberately NOT alphabetical. serde_yaml 0.9 preserves document
-    // order; a BTreeMap-backed replacement would sort them.
-    let d: Value = serde_yaml::from_str("zebra: 1\napple: 2\nmango: 3\n").unwrap();
-    let keys: Vec<&str> = d.as_mapping().unwrap().iter().filter_map(|(k, _)| k.as_str()).collect();
+    // Keys are deliberately NOT alphabetical. Document order must be kept
+    // (as serde_yaml 0.9 did); a BTreeMap-backed replacement would sort them.
+    let d: Value = yaml::from_str("zebra: 1\napple: 2\nmango: 3\n").unwrap();
+    let keys: Vec<&str> = d.as_mapping().unwrap().iter().map(|(k, _)| k.as_str()).collect();
     assert_eq!(keys, vec!["zebra", "apple", "mango"]);
   }
 
@@ -289,9 +293,9 @@ mod ordering {
     // mirrors: read_csv_file_as_yml — columns must keep CSV header order.
     let mut mapping = Mapping::new();
     for k in ["gamma", "alpha", "beta"] {
-      mapping.insert(Value::String(k.to_string()), Value::Null);
+      mapping.insert(k, Value::Null);
     }
-    let keys: Vec<&str> = mapping.iter().filter_map(|(k, _)| k.as_str()).collect();
+    let keys: Vec<&str> = mapping.iter().map(|(k, _)| k.as_str()).collect();
     assert_eq!(keys, vec!["gamma", "alpha", "beta"]);
   }
 }
@@ -308,19 +312,23 @@ mod serialization {
 
   #[test]
   fn to_string_scalar_format() {
-    assert_eq!(serde_yaml::to_string(&Value::String("foo".into())).unwrap(), "foo\n");
-    assert_eq!(serde_yaml::to_string(&Value::Number(Number::from(7_i64))).unwrap(), "7\n");
-    assert_eq!(serde_yaml::to_string(&Value::Bool(true)).unwrap(), "true\n");
-    assert_eq!(serde_yaml::to_string(&Value::Null).unwrap(), "null\n");
+    // serde_yaml 0.9 ended each scalar with a newline ("foo\n", "7\n", ...).
+    assert_eq!(yaml::to_string(&Value::String("foo".into())).unwrap(), "foo");
+    assert_eq!(yaml::to_string(&Value::Number(Number::from(7_i64))).unwrap(), "7");
+    assert_eq!(yaml::to_string(&Value::Bool(true)).unwrap(), "true");
+    assert_eq!(yaml::to_string(&Value::Null).unwrap(), "null");
   }
 
   #[test]
   fn to_string_mapping_with_nested_sequence_golden() {
     // mirrors: tags.rs list_benchmark_file_tasks — a plan item is serialized
     // and printed. This golden string pins indentation and block-sequence style.
-    let item: Value = serde_yaml::from_str("name: foo\nrequest:\n  url: /\ntags:\n  - tag1\n  - tag2\n").unwrap();
-    let out = serde_yaml::to_string(&item).unwrap();
-    let expected = "name: foo\nrequest:\n  url: /\ntags:\n- tag1\n- tag2\n";
+    // serde_yaml 0.9 gave "name: foo\nrequest:\n  url: /\ntags:\n- tag1\n- tag2\n":
+    // sequence items at the key's indent and a trailing newline. tags.rs adds
+    // the blank line between items itself, so only the item indent is visible.
+    let item: Value = yaml::from_str("name: foo\nrequest:\n  url: /\ntags:\n  - tag1\n  - tag2\n").unwrap();
+    let out = yaml::to_string(&item).unwrap();
+    let expected = "name: foo\nrequest:\n  url: /\ntags:\n  - tag1\n  - tag2";
     assert_eq!(out, expected);
   }
 
@@ -328,10 +336,10 @@ mod serialization {
   fn parse_serialize_round_trip_is_stable() {
     // A second parse+serialize must be a fixed point.
     let src = "a: 1\nb:\n- x\n- y\n";
-    let v1: Value = serde_yaml::from_str(src).unwrap();
-    let s1 = serde_yaml::to_string(&v1).unwrap();
-    let v2: Value = serde_yaml::from_str(&s1).unwrap();
-    let s2 = serde_yaml::to_string(&v2).unwrap();
+    let v1: Value = yaml::from_str(src).unwrap();
+    let s1 = yaml::to_string(&v1).unwrap();
+    let v2: Value = yaml::from_str(&s1).unwrap();
+    let s2 = yaml::to_string(&v2).unwrap();
     assert_eq!(s1, s2);
     assert_eq!(v1, v2);
   }
@@ -340,9 +348,9 @@ mod serialization {
 // ---------------------------------------------------------------------------
 // Multi-document behaviour
 //
-// mirrors: src/reader.rs parse_yaml_content — the comment "serde_yaml doesn't
-// support multiple documents natively, so we split by `---\n`". driller's manual
-// split rests on `from_str` being SINGLE-document. Pin that assumption: a
+// mirrors: src/reader.rs parse_yaml_content, which splits multi-document input
+// by `---\n` itself. driller's manual split rests on `from_str` being
+// SINGLE-document. Pin that assumption: a
 // replacement that silently accepts multi-doc (or errors differently) changes
 // how the reader must behave.
 // ---------------------------------------------------------------------------
@@ -351,10 +359,10 @@ mod multi_document {
 
   #[test]
   fn from_str_rejects_multi_document_input() {
-    // Two documents separated by `---`. serde_yaml::from_str::<Value> parses a
-    // single document and errors on a second one — which is exactly why driller
+    // Two documents separated by `---`. from_str::<Value> parses a single
+    // document and errors on a second one — which is exactly why driller
     // splits manually before calling from_str.
-    let result: Result<Value, _> = serde_yaml::from_str("a: 1\n---\nb: 2\n");
+    let result: Result<Value, _> = yaml::from_str("a: 1\n---\nb: 2\n");
     assert!(result.is_err(), "from_str must reject multi-document input so the manual split stays necessary");
   }
 
@@ -362,7 +370,7 @@ mod multi_document {
   fn single_document_with_leading_marker_parses() {
     // mirrors: parse_yaml_content strips a single leading `---\n`; a lone
     // document with a leading marker must still parse cleanly.
-    let v: Value = serde_yaml::from_str("---\nname: foo\n").unwrap();
+    let v: Value = yaml::from_str("---\nname: foo\n").unwrap();
     assert_eq!(v.get("name").and_then(|v| v.as_str()), Some("foo"));
   }
 }
@@ -379,7 +387,7 @@ mod errors {
   #[test]
   fn malformed_yaml_is_err() {
     // Unbalanced flow mapping — must be Err, not a panic and not Ok.
-    let result: Result<Value, _> = serde_yaml::from_str("{ unclosed: ");
+    let result: Result<Value, _> = yaml::from_str("{ unclosed: ");
     assert!(result.is_err());
   }
 
@@ -387,7 +395,7 @@ mod errors {
   fn error_has_displayable_message() {
     // mirrors: die(format!("... {e}")) — the error must Display to a non-empty
     // message that gets shown to the user.
-    let result: Result<Value, _> = serde_yaml::from_str("\t- tab-indent-is-invalid");
+    let result: Result<Value, _> = yaml::from_str("\t- tab-indent-is-invalid");
     let err = result.unwrap_err();
     assert!(!err.to_string().is_empty());
   }
@@ -411,22 +419,15 @@ mod yaml_to_json_bridge {
   fn yaml_to_json(data: Value) -> JsonValue {
     match data {
       Value::Bool(b) => json!(b),
-      Value::Number(n) => {
-        if let Some(i) = n.as_i64() {
-          json!(i)
-        } else if let Some(f) = n.as_f64() {
-          json!(f)
-        } else {
-          json!(n.to_string())
-        }
-      }
+      Value::Number(n) => match n.as_i64() {
+        Some(i) => json!(i),
+        None => json!(n.as_f64()),
+      },
       Value::String(s) => json!(s),
       Value::Mapping(m) => {
         let mut map = Map::new();
         for (key, value) in m.iter() {
-          if let Some(key_str) = key.as_str() {
-            map.insert(key_str.to_string(), yaml_to_json(value.clone()));
-          }
+          map.insert(key.clone(), yaml_to_json(value.clone()));
         }
         json!(map)
       }
@@ -444,7 +445,7 @@ mod yaml_to_json_bridge {
 
   #[test]
   fn converts_nested_structure_with_mixed_scalars() {
-    let yaml: Value = serde_yaml::from_str("id: 1\nratio: 1.5\nactive: true\nname: ada\nempty: null\ntags:\n  - x\n  - y\nmeta:\n  k: v\n").unwrap();
+    let yaml: Value = yaml::from_str("id: 1\nratio: 1.5\nactive: true\nname: ada\nempty: null\ntags:\n  - x\n  - y\nmeta:\n  k: v\n").unwrap();
     let got = yaml_to_json(yaml);
     let expected = json!({
       "id": 1,
@@ -461,16 +462,17 @@ mod yaml_to_json_bridge {
   #[test]
   fn integer_becomes_json_integer_not_float() {
     // The i64-first probe matters: `1` must serialize as `1`, not `1.0`.
-    let yaml: Value = serde_yaml::from_str("n: 1\n").unwrap();
+    let yaml: Value = yaml::from_str("n: 1\n").unwrap();
     assert_eq!(yaml_to_json(yaml).to_string(), r#"{"n":1}"#);
   }
 
   #[test]
-  fn non_string_mapping_keys_are_dropped() {
-    // mirrors: yaml_to_json skips keys where key.as_str() is None. A mapping
-    // keyed by an integer contributes nothing to the JSON object.
-    let yaml: Value = serde_yaml::from_str("1: one\ntwo: 2\n").unwrap();
+  fn non_string_mapping_keys_become_strings() {
+    // mirrors: yaml_to_json keeps every key. Mapping keys are strings, so an
+    // integer-looking key arrives as "1". serde_yaml 0.9 kept it as a number
+    // and yaml_to_json dropped it, giving `{ "two": 2 }`.
+    let yaml: Value = yaml::from_str("1: one\ntwo: 2\n").unwrap();
     let got = yaml_to_json(yaml);
-    assert_eq!(got, json!({ "two": 2 }));
+    assert_eq!(got, json!({ "1": "one", "two": 2 }));
   }
 }

@@ -1,9 +1,9 @@
 use std::sync::atomic::Ordering;
 
+use crate::yaml::Value;
 use async_trait::async_trait;
 use colored::*;
 use serde_json::json;
-use serde_yaml::Value;
 
 use crate::actions::Runnable;
 use crate::actions::extract;
@@ -88,7 +88,7 @@ mod tests {
   }
 
   fn assert_item(name: &str, key: &str, value: &str) -> Assert {
-    let item: Value = serde_yaml::from_str(&format!("name: {name}\nassert:\n  key: {key}\n  value: {value}\n")).unwrap();
+    let item: Value = crate::yaml::from_str(&format!("name: {name}\nassert:\n  key: {key}\n  value: {value}\n")).unwrap();
     Assert::new(&item, None)
   }
 

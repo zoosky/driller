@@ -1,4 +1,4 @@
-use serde_yaml::{Mapping, Value};
+use crate::yaml::{Mapping, Value};
 use std::fs::File;
 use std::io::{BufReader, prelude::*};
 use std::path::Path;
@@ -35,8 +35,9 @@ pub fn read_file(filepath: &str) -> Result<String, Error> {
 
 /// Parses YAML text into one or more documents.
 ///
-/// serde_yaml does not expose multi-document parsing, so multi-document input
-/// (separated by `---\n`) is split and each part parsed individually. An empty
+/// Multi-document input (separated by `---\n`) is split here and each part
+/// parsed individually, which keeps driller's long-standing multi-document
+/// behaviour independent of the YAML crate. An empty
 /// or comment-only input yields a single `Null` document to keep callers that
 /// index `[0]` working.
 fn parse_yaml_content(content: &str) -> Result<Vec<Value>, Error> {
@@ -50,7 +51,7 @@ fn parse_yaml_content(content: &str) -> Result<Vec<Value>, Error> {
       let trimmed = doc_str.trim();
       // Skip empty parts and parts that are only comments
       if !trimmed.is_empty() && !trimmed.chars().all(|c| c == '#' || c.is_whitespace() || c == '\n') {
-        let doc = serde_yaml::from_str::<Value>(trimmed).map_err(|source| Error::Yaml {
+        let doc = crate::yaml::from_str::<Value>(trimmed).map_err(|source| Error::Yaml {
           what: "document",
           source,
         })?;
@@ -66,7 +67,7 @@ fn parse_yaml_content(content: &str) -> Result<Vec<Value>, Error> {
   if docs.is_empty() {
     // Remove leading "---\n" if present for single-document files
     let content_to_parse = trimmed_content.strip_prefix("---\n").unwrap_or(trimmed_content);
-    let doc = serde_yaml::from_str::<Value>(content_to_parse.trim()).map_err(|source| Error::Yaml {
+    let doc = crate::yaml::from_str::<Value>(content_to_parse.trim()).map_err(|source| Error::Yaml {
       what: "content",
       source,
     })?;
@@ -162,7 +163,7 @@ pub fn read_csv_file_as_yml(filepath: &str, quote: u8) -> Result<Vec<Value>, Err
         let mut mapping = Mapping::new();
 
         for (i, header) in headers.iter().enumerate() {
-          let item_key = Value::String(header.to_string());
+          let item_key = header.to_string();
           let item_value = Value::String(record.get(i).unwrap().to_string());
 
           mapping.insert(item_key, item_value);
