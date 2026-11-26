@@ -10,8 +10,8 @@ menu:
 
 ## Relationship to upstream
 
-- **Same license.** GPL-3.0-or-later. The original `LICENSE` file is preserved
-  unchanged.
+- **Same license.** GPL-3.0-only, as declared by upstream. The original
+  `LICENSE` file is preserved unchanged.
 - **Same DSL.** Existing `drill` benchmark YAML files work without modification.
 - **Different binary name.** `driller` everywhere -- crate, binary, User-Agent. To prevent name clash with the driller DNS tool.
 
@@ -30,4 +30,4 @@ does not need changes.
 
 ## License
 
-GPL-3.0-or-later. See [LICENSE](https://github.com/zoosky/driller/blob/main/LICENSE).
+GPL-3.0-only. See [LICENSE](https://github.com/zoosky/driller/blob/main/LICENSE).
