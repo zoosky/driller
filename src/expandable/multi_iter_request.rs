@@ -1,8 +1,8 @@
 use std::convert::TryInto;
 
+use crate::yaml::{Number, Value};
 use rand::rng;
 use rand::seq::SliceRandom;
-use serde_yaml::{Number, Value};
 
 use crate::interpolator::INTERPOLATION_REGEX;
 
@@ -15,14 +15,10 @@ pub fn is_that_you(item: &Value) -> bool {
 
 pub fn expand(item: &Value, benchmark: &mut Benchmark) {
   if let Some(with_iter_items) = item.get("with_items_range").and_then(|v| v.as_mapping()) {
-    let lstart = Value::String("start".into());
-    let lstep = Value::String("step".into());
-    let lstop = Value::String("stop".into());
-
-    let vstart = with_iter_items.get(&lstart).expect("Start property is mandatory");
+    let vstart = with_iter_items.get("start").expect("Start property is mandatory");
     let default_step = Value::Number(Number::from(1));
-    let vstep = with_iter_items.get(&lstep).unwrap_or(&default_step);
-    let vstop = with_iter_items.get(&lstop).expect("Stop property is mandatory");
+    let vstep = with_iter_items.get("step").unwrap_or(&default_step);
+    let vstop = with_iter_items.get("stop").expect("Stop property is mandatory");
 
     let start: &str = vstart.as_str().unwrap_or("");
     let step: &str = vstep.as_str().unwrap_or("");

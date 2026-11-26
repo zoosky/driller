@@ -4,9 +4,9 @@ use crate::benchmark::Benchmark;
 use crate::error::Error;
 use crate::interpolator::INTERPOLATION_REGEX;
 use crate::reader;
+use crate::yaml::Value;
 use rand::rng;
 use rand::seq::SliceRandom;
-use serde_yaml::Value;
 use std::path::Path;
 
 pub fn is_that_you(item: &Value) -> bool {

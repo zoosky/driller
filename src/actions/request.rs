@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
+use crate::yaml::Value as YamlValue;
 use async_trait::async_trait;
 use colored::Colorize;
 use encoding_rs::{Encoding, UTF_8};
@@ -8,7 +9,6 @@ use reqwest::{
   ClientBuilder, Method, StatusCode,
   header::{self, HeaderMap, HeaderName, HeaderValue},
 };
-use serde_yaml::Value as YamlValue;
 use std::fmt::Write;
 use std::fs::File;
 use std::io::Read;
@@ -127,12 +127,14 @@ impl Request {
 
     if let Some(mapping) = request_val.get("headers").and_then(|v| v.as_mapping()) {
       for (key, val) in mapping.iter() {
+        // Mapping keys are always strings, so a key such as `1:` arrives as "1".
+        // A missing or null key (`: value`, `~:`, `null:`) arrives as "null";
+        // reject it rather than send a header literally named `null`.
+        if key == "null" {
+          panic!("{} Header names must not be empty or null!!", "WARNING!".yellow().bold());
+        }
         if let Some(vs) = val.as_str() {
-          if let Some(key_str) = key.as_str() {
-            headers.insert(key_str.to_string(), vs.to_string());
-          } else {
-            panic!("{} Header keys must be strings!!", "WARNING!".yellow().bold());
-          }
+          headers.insert(key.clone(), vs.to_string());
         } else {
           panic!("{} Headers must be strings!!", "WARNING!".yellow().bold());
         }
@@ -507,20 +509,20 @@ fn yaml_to_json(data: YamlValue) -> Value {
     YamlValue::Number(n) => {
       if let Some(i) = n.as_i64() {
         json!(i)
-      } else if let Some(f) = n.as_f64() {
-        json!(f)
+      } else if let Some(u) = n.as_u64() {
+        // Unsigned integers above `i64::MAX` stay exact.
+        json!(u)
       } else {
-        // Fallback: convert to string representation
-        json!(n.to_string())
+        json!(n.as_f64())
       }
     }
     YamlValue::String(s) => json!(s),
     YamlValue::Mapping(m) => {
       let mut map = Map::new();
+      // Mapping keys are always strings, so every entry is kept; a YAML key
+      // such as `1:` becomes the JSON key "1".
       for (key, value) in m.iter() {
-        if let Some(key_str) = key.as_str() {
-          map.insert(key_str.to_string(), yaml_to_json(value.clone()));
-        }
+        map.insert(key.clone(), yaml_to_json(value.clone()));
       }
       json!(map)
     }
@@ -654,7 +656,7 @@ fn log_response(log_message_response: String, body: &Option<String>) {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use serde_yaml::Value as YamlValue;
+  use crate::yaml::Value as YamlValue;
   use std::io::Write;
   use tempfile::NamedTempFile;
 
@@ -669,7 +671,7 @@ request:
 "#,
       body_content
     );
-    serde_yaml::from_str(&yaml_str).unwrap()
+    crate::yaml::from_str(&yaml_str).unwrap()
   }
 
   fn create_yaml_request_with_hex_body(hex_content: &str) -> YamlValue {
@@ -684,7 +686,7 @@ request:
 "#,
       hex_content
     );
-    serde_yaml::from_str(&yaml_str).unwrap()
+    crate::yaml::from_str(&yaml_str).unwrap()
   }
 
   fn create_yaml_request_with_file_body(file_path: &str) -> YamlValue {
@@ -699,7 +701,32 @@ request:
 "#,
       file_path
     );
-    serde_yaml::from_str(&yaml_str).unwrap()
+    crate::yaml::from_str(&yaml_str).unwrap()
+  }
+
+  #[test]
+  #[should_panic(expected = "Header names must not be empty or null")]
+  fn empty_header_name_is_rejected() {
+    let yaml: YamlValue = crate::yaml::from_str("name: test_request\nrequest:\n  url: http://example.com\n  headers:\n    : application/json\n").unwrap();
+    Request::new(&yaml, None, None);
+  }
+
+  #[test]
+  #[should_panic(expected = "Header names must not be empty or null")]
+  fn null_header_name_is_rejected() {
+    let yaml: YamlValue = crate::yaml::from_str("name: test_request\nrequest:\n  url: http://example.com\n  headers:\n    ~: x\n").unwrap();
+    Request::new(&yaml, None, None);
+  }
+
+  #[test]
+  fn header_keys_that_look_like_numbers_are_kept_as_strings() {
+    // YAML mapping keys are always strings, so `1:` arrives as "1" and is sent
+    // as a header name instead of aborting the run.
+    let yaml: YamlValue = crate::yaml::from_str("name: test_request\nrequest:\n  url: http://example.com\n  headers:\n    X-Trace: abc\n    1: one\n").unwrap();
+    let request = Request::new(&yaml, None, None);
+
+    assert_eq!(request.headers.get("X-Trace").map(String::as_str), Some("abc"));
+    assert_eq!(request.headers.get("1").map(String::as_str), Some("one"));
   }
 
   #[test]
@@ -846,7 +873,7 @@ request:
   url: http://example.com
   method: GET
 "#;
-    let yaml: YamlValue = serde_yaml::from_str(yaml_str).unwrap();
+    let yaml: YamlValue = crate::yaml::from_str(yaml_str).unwrap();
     let request = Request::new(&yaml, None, None);
 
     assert!(request.body.is_none());
@@ -860,7 +887,7 @@ request:
   url: http://example.com
   method: DELETE
 "#;
-    let yaml: YamlValue = serde_yaml::from_str(yaml_str).unwrap();
+    let yaml: YamlValue = crate::yaml::from_str(yaml_str).unwrap();
     let request = Request::new(&yaml, None, None);
 
     assert!(request.body.is_none());
@@ -931,7 +958,7 @@ request:
   method: PUT
   body: "PUT body content"
 "#;
-    let yaml: YamlValue = serde_yaml::from_str(yaml_str).unwrap();
+    let yaml: YamlValue = crate::yaml::from_str(yaml_str).unwrap();
     let request = Request::new(&yaml, None, None);
 
     match request.body {
@@ -952,7 +979,7 @@ request:
   body:
     hex: "5061746368"
 "#;
-    let yaml: YamlValue = serde_yaml::from_str(yaml_str).unwrap();
+    let yaml: YamlValue = crate::yaml::from_str(yaml_str).unwrap();
     let request = Request::new(&yaml, None, None);
 
     match request.body {

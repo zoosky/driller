@@ -43,7 +43,7 @@ pub enum Error {
     /// The parse context, used in the message.
     what: &'static str,
     /// The underlying deserialization error.
-    source: serde_yaml::Error,
+    source: crate::yaml::Error,
   },
   /// A CSV header could not be parsed. `path` names the source file.
   #[error("couldn't parse CSV header in {path}: {source}")]
@@ -120,7 +120,7 @@ mod tests {
   /// underlying error's own message, and forward `source()`.
   #[test]
   fn wrapped_variants_keep_template_and_source() {
-    let yaml = serde_yaml::from_str::<i32>("not an integer").unwrap_err();
+    let yaml = crate::yaml::from_str::<i32>("not an integer").unwrap_err();
     let yaml_display = yaml.to_string();
     let err = Error::Yaml {
       what: "document",

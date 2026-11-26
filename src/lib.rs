@@ -36,6 +36,10 @@
 //! (tests, benchmarks, and sibling crates); their members keep their original
 //! visibility. `interpolator` and `writer` stay crate-private as they appear in
 //! no public interface.
+//!
+//! [`yaml`] re-exports the YAML types that appear in public signatures (for
+//! example [`yaml::Value`]), so callers do not need to depend on the YAML crate
+//! themselves.
 
 pub mod actions;
 pub mod benchmark;
@@ -45,6 +49,7 @@ pub mod error;
 pub mod expandable;
 pub mod reader;
 pub mod tags;
+pub mod yaml;
 
 mod interpolator;
 mod writer;

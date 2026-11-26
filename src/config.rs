@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::time::Duration;
 
-use serde_yaml::Value;
+use crate::yaml::Value;
 
 use crate::benchmark::{Context, RunOptions};
 use crate::error::Error;

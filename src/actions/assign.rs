@@ -1,7 +1,7 @@
+use crate::yaml::Value;
 use async_trait::async_trait;
 use colored::*;
 use serde_json::json;
-use serde_yaml::Value;
 
 use crate::actions::Runnable;
 use crate::actions::extract;

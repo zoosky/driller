@@ -1,4 +1,4 @@
-use serde_yaml::{Mapping, Value};
+use crate::yaml::{Mapping, Value};
 use std::fs::File;
 use std::io::{BufReader, prelude::*};
 use std::path::Path;
@@ -35,8 +35,9 @@ pub fn read_file(filepath: &str) -> Result<String, Error> {
 
 /// Parses YAML text into one or more documents.
 ///
-/// serde_yaml does not expose multi-document parsing, so multi-document input
-/// (separated by `---\n`) is split and each part parsed individually. An empty
+/// Multi-document input (separated by `---\n`) is split here and each part
+/// parsed individually, which keeps driller's long-standing multi-document
+/// behaviour independent of the YAML crate. An empty
 /// or comment-only input yields a single `Null` document to keep callers that
 /// index `[0]` working.
 fn parse_yaml_content(content: &str) -> Result<Vec<Value>, Error> {
@@ -50,7 +51,7 @@ fn parse_yaml_content(content: &str) -> Result<Vec<Value>, Error> {
       let trimmed = doc_str.trim();
       // Skip empty parts and parts that are only comments
       if !trimmed.is_empty() && !trimmed.chars().all(|c| c == '#' || c.is_whitespace() || c == '\n') {
-        let doc = serde_yaml::from_str::<Value>(trimmed).map_err(|source| Error::Yaml {
+        let doc = crate::yaml::from_str::<Value>(trimmed).map_err(|source| Error::Yaml {
           what: "document",
           source,
         })?;
@@ -66,7 +67,7 @@ fn parse_yaml_content(content: &str) -> Result<Vec<Value>, Error> {
   if docs.is_empty() {
     // Remove leading "---\n" if present for single-document files
     let content_to_parse = trimmed_content.strip_prefix("---\n").unwrap_or(trimmed_content);
-    let doc = serde_yaml::from_str::<Value>(content_to_parse.trim()).map_err(|source| Error::Yaml {
+    let doc = crate::yaml::from_str::<Value>(content_to_parse.trim()).map_err(|source| Error::Yaml {
       what: "content",
       source,
     })?;
@@ -106,7 +107,23 @@ pub fn read_yaml_doc_accessor<'a>(doc: &'a Value, accessor: Option<&str>) -> Res
       None => Err(Error::MissingNode(accessor_id.to_string())),
     }
   } else {
-    doc.as_sequence().ok_or_else(|| Error::NotASequence(format!("{doc:?}")))
+    doc.as_sequence().ok_or_else(|| Error::NotASequence(kind_of(doc).to_string()))
+  }
+}
+
+/// Names the kind of a YAML value for error messages ("a mapping", "a string").
+///
+/// Used instead of the value's `Debug` output, which dumps the whole document
+/// in the YAML crate's internal representation.
+fn kind_of(value: &Value) -> &'static str {
+  match value {
+    Value::Null => "null",
+    Value::Bool(_) => "a boolean",
+    Value::Number(_) => "a number",
+    Value::String(_) => "a string",
+    Value::Sequence(_) => "a sequence",
+    Value::Mapping(_) => "a mapping",
+    _ => "a tagged value",
   }
 }
 
@@ -162,7 +179,7 @@ pub fn read_csv_file_as_yml(filepath: &str, quote: u8) -> Result<Vec<Value>, Err
         let mut mapping = Mapping::new();
 
         for (i, header) in headers.iter().enumerate() {
-          let item_key = Value::String(header.to_string());
+          let item_key = header.to_string();
           let item_value = Value::String(record.get(i).unwrap().to_string());
 
           mapping.insert(item_key, item_value);
@@ -175,4 +192,16 @@ pub fn read_csv_file_as_yml(filepath: &str, quote: u8) -> Result<Vec<Value>, Err
   }
 
   Ok(items)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn non_sequence_document_error_names_the_kind() {
+    let doc: Value = crate::yaml::from_str("base: http://localhost:9000\n").unwrap();
+    let err = read_yaml_doc_accessor(&doc, None).unwrap_err();
+    assert_eq!(err.to_string(), "expected document to be a sequence, got: a mapping");
+  }
 }

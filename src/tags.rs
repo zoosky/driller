@@ -1,7 +1,7 @@
 use crate::error::Error;
 use crate::reader;
+use crate::yaml::Value;
 use colored::*;
-use serde_yaml::Value;
 use std::collections::HashSet;
 
 #[derive(Debug)]
@@ -88,8 +88,10 @@ pub fn list_benchmark_file_tasks(benchmark_file: &str, tags: &Tags) -> Result<()
   }
 
   for item in items {
-    let out_str = serde_yaml::to_string(item).unwrap();
-    println!("{out_str}");
+    let out_str = crate::yaml::to_string(item).unwrap();
+    // One blank line between items, whether or not the serializer ends its
+    // output with a newline.
+    println!("{}\n", out_str.trim_end_matches('\n'));
   }
 
   Ok(())
