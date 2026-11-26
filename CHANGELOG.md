@@ -7,12 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.4] - 2026-11-26
+
 ### Security
 - Bump `cookie` 0.18.2 -> 0.18.3 to clear RUSTSEC-2026-0594 (private cookie
   nonces can repeat in processes that fork). `cookie` reaches driller only
   through `reqwest`'s cookie store, without the `private` feature, so the
   affected `PrivateJar` functions are not compiled into driller, and driller
-  does not fork. Lockfile-only change; no driller source is affected.
+  does not fork. Lockfile-only change; no driller source is affected. Released
+  so that `--locked` installs and `cargo audit` runs against the published
+  crate no longer flag `cookie` 0.18.2.
 
 ## [0.13.3] - 2026-11-23
 
@@ -389,7 +393,8 @@ See [FORK.md](https://github.com/zoosky/driller/blob/main/FORK.md) for rationale
 - Benchmark YAML format and CLI flags are fully compatible with drill 0.9.0
 - Full upstream git history preserved
 
-[Unreleased]: https://github.com/zoosky/driller/compare/0.13.3...HEAD
+[Unreleased]: https://github.com/zoosky/driller/compare/0.13.4...HEAD
+[0.13.4]: https://github.com/zoosky/driller/compare/0.13.3...0.13.4
 [0.13.3]: https://github.com/zoosky/driller/compare/0.13.2...0.13.3
 [0.13.2]: https://github.com/zoosky/driller/compare/0.13.1...0.13.2
 [0.13.1]: https://github.com/zoosky/driller/compare/0.13.0...0.13.1
