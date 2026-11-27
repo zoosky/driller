@@ -165,3 +165,16 @@ article .content th code {
   font-size: 0.85em;
   padding: 0.1rem 0.3rem;
 }
+
+// On a phone, a wide table scrolls sideways inside its own box and long
+// inline code (paths, flags, URLs) wraps, so neither widens the page.
+@media (max-width: 640px) {
+  article .content table {
+    display: block;
+    overflow-x: auto;
+  }
+
+  article .content code {
+    overflow-wrap: anywhere;
+  }
+}

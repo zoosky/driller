@@ -126,10 +126,11 @@ footer {
     color: var(--color-border-strong);
   }
 
-  // Accent CMS version and commit the site was built with.
+  // Accent CMS version and commit the site was built with, kept on one line.
   .footer-build {
     font-family: var(--font-mono);
     font-size: 0.72rem;
+    white-space: nowrap;
   }
 }
 
@@ -143,5 +144,22 @@ footer {
     flex-direction: column;
     gap: 0.75rem;
     align-items: center;
+  }
+
+  // The footer wraps at this width, and the separators would end up at the
+  // ends of lines; drop them, space the links, and give the build line a
+  // row of its own.
+  footer {
+    column-gap: 1rem;
+    row-gap: 0.5rem;
+
+    .footer-sep {
+      display: none;
+    }
+
+    .footer-credit {
+      flex-basis: 100%;
+      text-align: center;
+    }
   }
 }

@@ -45,10 +45,10 @@ concurrency:
 env:
   # The Accent CMS release the site is built with. Bump deliberately, after
   # a local build with the new version.
-  ACCENT_VERSION: v0.29.0-rc.4
+  ACCENT_VERSION: v0.29.0
   # The installer that fetches and verifies that release (crates.io crate
   # `accent`, binary `accentup`). The cache key below changes with it.
-  ACCENTUP_VERSION: "0.1.3"
+  ACCENTUP_VERSION: "0.1.4"
   SITE_URL: https://zoosky.github.io/driller
 
 jobs:
