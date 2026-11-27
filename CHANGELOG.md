@@ -31,10 +31,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cookies are now separated by `"; "`, as RFC 6265 specifies. The example
   server no longer strips quotes either, so the cookies example plan checks
   this in CI.
+- Plan files reach the YAML parser unchanged. driller trimmed each file and
+  split it at every `---` followed by a line break before parsing, which
+  broke three things:
+  - a block scalar at the end of the file lost its final line break
+    (`body: |` sent `line one` instead of `line one` plus a newline; `|+`
+    lost all its trailing line breaks);
+  - a `---` line inside an indented block scalar, such as a Markdown rule in
+    a request body, split the plan and failed to parse;
+  - a multi-document file with Windows (CRLF) line endings failed to parse.
+
+  The YAML parser now finds the documents itself, at `---` and `...` markers,
+  as the YAML standard says. This applies to plans, included files and
+  `--compare` report files.
+
+### Added
+- Library: `driller::yaml::from_str_multi` parses every document of a YAML
+  stream with the same rules as `driller::yaml::from_str`.
 
 ### Changed
 - Custom headers are sent in the order the plan lists them, instead of in a
   different order on every run.
+- A parse error in a multi-document file says `failed to parse YAML content`,
+  like one in a single-document file, instead of `failed to parse YAML
+  document`.
 
 ## [0.14.2] - 2026-11-27
 

@@ -365,21 +365,74 @@ mod serialization {
 mod multi_document {
   use super::*;
 
+  // mirrors: src/reader.rs parse_yaml_content, which reads every plan file,
+  // include and `--compare` report through from_str_multi.
+
   #[test]
   fn from_str_rejects_multi_document_input() {
-    // Two documents separated by `---`. from_str::<Value> parses a single
-    // document and errors on a second one — which is exactly why driller
-    // splits manually before calling from_str.
+    // from_str::<Value> parses exactly one document; from_str_multi reads a
+    // stream.
     let result: Result<Value, _> = yaml::from_str("a: 1\n---\nb: 2\n");
-    assert!(result.is_err(), "from_str must reject multi-document input so the manual split stays necessary");
+    assert!(result.is_err(), "from_str must reject multi-document input");
   }
 
   #[test]
   fn single_document_with_leading_marker_parses() {
-    // mirrors: parse_yaml_content strips a single leading `---\n`; a lone
-    // document with a leading marker must still parse cleanly.
     let v: Value = yaml::from_str("---\nname: foo\n").unwrap();
     assert_eq!(v.get("name").and_then(|v| v.as_str()), Some("foo"));
+  }
+
+  #[test]
+  fn from_str_multi_splits_documents_at_markers() {
+    let docs = yaml::from_str_multi("---\na: 1\n---\nb: 2\n...\n---\nc: 3\n").unwrap();
+    assert_eq!(docs.len(), 3);
+    assert_eq!(docs[2]["c"].as_i64(), Some(3));
+  }
+
+  #[test]
+  fn from_str_multi_keeps_an_indented_marker_line_as_content() {
+    // driller 0.14.2 and earlier split the text on every `---\n` substring,
+    // so this body broke the plan.
+    let docs = yaml::from_str_multi("---\nbody: |\n  intro\n  ---\n  end\n").unwrap();
+    assert_eq!(docs.len(), 1);
+    assert_eq!(docs[0]["body"].as_str(), Some("intro\n---\nend\n"));
+  }
+
+  #[test]
+  fn from_str_multi_keeps_the_final_line_break_of_a_trailing_block_scalar() {
+    // driller 0.14.2 and earlier trimmed the file first, which dropped it.
+    let docs = yaml::from_str_multi("body: |\n  line one\n").unwrap();
+    assert_eq!(docs[0]["body"].as_str(), Some("line one\n"));
+    let keep = yaml::from_str_multi("body: |+\n  line one\n\n").unwrap();
+    assert_eq!(keep[0]["body"].as_str(), Some("line one\n\n"));
+  }
+
+  #[test]
+  fn from_str_multi_reads_crlf_documents() {
+    let docs = yaml::from_str_multi("---\r\na: 1\r\n---\r\nb: 2\r\n").unwrap();
+    assert_eq!(docs.len(), 2);
+    assert_eq!(docs[1]["b"].as_i64(), Some(2));
+  }
+
+  #[test]
+  fn from_str_multi_empty_and_comment_documents() {
+    assert!(yaml::from_str_multi("").unwrap().is_empty());
+    let docs = yaml::from_str_multi("# only a comment\n").unwrap();
+    assert!(docs.iter().all(Value::is_null), "{docs:?}");
+    let docs = yaml::from_str_multi("---\n# comment doc\n---\na: 1\n").unwrap();
+    assert_eq!(docs.last().and_then(|d| d["a"].as_i64()), Some(1));
+  }
+
+  #[test]
+  fn from_str_multi_uses_the_same_rules_as_from_str() {
+    // Duplicate keys in any document, with a stream-relative position.
+    let err = yaml::from_str_multi("---\na: 1\n---\nb: 2\nb: 3\n").unwrap_err();
+    assert!(err.to_string().contains("duplicate entry with key \"b\""), "{err}");
+    let location = err.location().expect("duplicate-key error has a location");
+    assert_eq!((location.line(), location.column()), (5, 1));
+    // Tags removed in every document.
+    let docs = yaml::from_str_multi("---\nurl: !path /x\n---\nurl: !path /y\n").unwrap();
+    assert_eq!(docs[1]["url"].as_str(), Some("/y"));
   }
 }
 

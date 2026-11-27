@@ -35,42 +35,24 @@ pub fn read_file(filepath: &str) -> Result<String, Error> {
 
 /// Parses YAML text into one or more documents.
 ///
-/// Multi-document input (separated by `---\n`) is split here and each part
-/// parsed individually, which keeps driller's long-standing multi-document
-/// behaviour independent of the YAML crate. An empty
-/// or comment-only input yields a single `Null` document to keep callers that
-/// index `[0]` working.
+/// The text goes to the YAML parser unchanged ([`crate::yaml::from_str_multi`]),
+/// so documents are split only at `---` / `...` markers, every value keeps its
+/// exact text (a block scalar at the end of the file keeps its final line
+/// break), and error positions count lines from the top of the file.
+///
+/// Empty and comment-only documents are dropped. When nothing is left (an
+/// empty or comment-only file), a single `Null` document is returned, so
+/// callers that index `[0]` keep working.
 fn parse_yaml_content(content: &str) -> Result<Vec<Value>, Error> {
-  let mut docs = Vec::new();
-  let trimmed_content = content.trim();
+  let mut docs: Vec<Value> = crate::yaml::from_str_multi(content)
+    .map_err(|source| Error::Yaml {
+      what: "content",
+      source,
+    })?
+    .into_iter()
+    .filter(|doc| !matches!(doc, Value::Null))
+    .collect();
 
-  // Handle multi-document YAML (separated by "---\n")
-  if trimmed_content.contains("\n---\n") || (trimmed_content.starts_with("---\n") && trimmed_content.matches("---\n").count() > 1) {
-    let parts: Vec<&str> = trimmed_content.split("---\n").collect();
-    for doc_str in parts {
-      let trimmed = doc_str.trim();
-      // Skip empty parts and parts that are only comments
-      if !trimmed.is_empty() && !trimmed.chars().all(|c| c == '#' || c.is_whitespace() || c == '\n') {
-        let doc = parse_chunk(content, trimmed, "document")?;
-        // Skip Null documents (which can result from comments-only content)
-        if !matches!(doc, Value::Null) {
-          docs.push(doc);
-        }
-      }
-    }
-  }
-
-  // If no documents were found (empty file or no "---"), try parsing the whole content
-  if docs.is_empty() {
-    // Remove leading "---\n" if present for single-document files
-    let content_to_parse = trimmed_content.strip_prefix("---\n").unwrap_or(trimmed_content);
-    let doc = parse_chunk(content, content_to_parse.trim(), "content")?;
-    if !matches!(doc, Value::Null) {
-      docs.push(doc);
-    }
-  }
-
-  // If still empty, return a single Null document to maintain compatibility
   if docs.is_empty() {
     docs.push(Value::Null);
   }
@@ -103,30 +85,6 @@ pub fn read_yaml_doc_accessor<'a>(doc: &'a Value, accessor: Option<&str>) -> Res
   } else {
     doc.as_sequence().ok_or_else(|| Error::NotASequence(kind_of(doc).to_string()))
   }
-}
-
-/// Parses `chunk`, a slice of `content`, so that error positions count lines
-/// from the start of the whole file.
-///
-/// [`parse_yaml_content`] trims the file, drops a leading `---` and splits
-/// multi-document input before parsing, so the YAML parser only sees part of
-/// the text. Padding the chunk with the newlines that came before it keeps the
-/// reported line numbers pointing at the right line of the file. Leading blank
-/// lines do not change what a YAML document means.
-fn parse_chunk(content: &str, chunk: &str, what: &'static str) -> Result<Value, Error> {
-  let offset = (chunk.as_ptr() as usize).saturating_sub(content.as_ptr() as usize).min(content.len());
-  let lines_before = content.get(..offset).map_or(0, |prefix| prefix.matches('\n').count());
-  let padded;
-  let text = if lines_before == 0 {
-    chunk
-  } else {
-    padded = format!("{}{chunk}", "\n".repeat(lines_before));
-    padded.as_str()
-  };
-  crate::yaml::from_str::<Value>(text).map_err(|source| Error::Yaml {
-    what,
-    source,
-  })
 }
 
 /// Names the kind of a YAML value for error messages ("a mapping", "a string").
@@ -226,6 +184,27 @@ mod tests {
     let multi = "---\nfirst: 1\n---\nplan:\n  - name: dup\n    request:\n      url: /a\n      url: /b\n";
     let err = parse_yaml_content(multi).unwrap_err();
     assert!(err.to_string().ends_with("at line 8 column 7"), "{err}");
+  }
+
+  #[test]
+  fn plan_text_reaches_the_parser_unchanged() {
+    // A `---` line inside a body and a body at the end of the file: before
+    // 0.14.3 the reader split the text at the first and trimmed away the
+    // final line break of the second.
+    let content = "---\nplan:\n  - name: a\n    request:\n      url: /a\n      method: POST\n      body: |\n        intro\n        ---\n        end\n  - name: b\n    request:\n      url: /b\n      method: POST\n      body: |\n        last\n";
+    let docs = parse_yaml_content(content).unwrap();
+    assert_eq!(docs.len(), 1);
+    assert_eq!(docs[0]["plan"][0]["request"]["body"].as_str(), Some("intro\n---\nend\n"));
+    assert_eq!(docs[0]["plan"][1]["request"]["body"].as_str(), Some("last\n"));
+  }
+
+  #[test]
+  fn empty_and_comment_only_files_read_as_one_null_document() {
+    assert_eq!(parse_yaml_content("").unwrap(), vec![Value::Null]);
+    assert_eq!(parse_yaml_content("# nothing here\n").unwrap(), vec![Value::Null]);
+    let docs = parse_yaml_content("---\n# comment doc\n---\na: 1\n").unwrap();
+    assert_eq!(docs.len(), 1);
+    assert_eq!(docs[0]["a"].as_i64(), Some(1));
   }
 
   #[test]
