@@ -90,22 +90,29 @@ the mounted files get the build and link check only.
 ## Releasing
 
 `driller --version` embeds the commit hash so a build can be traced back to its
-source. The hash comes from `build.rs`, which reads `git rev-parse` in a normal
-checkout. A `cargo install` from crates.io builds from the published tarball,
-which has no `.git` -- so the hash must be written into the package at publish
-time. When cutting a crates.io release, from the repo root:
+source. `build.rs` takes it from `git rev-parse` in a checkout, from
+`GITHUB_SHA` in the release workflow's container builds, and, for a `cargo
+install` from crates.io, from the `.cargo_vcs_info.json` that `cargo publish`
+writes into the package. No extra publish step is needed.
 
-```sh
-git rev-parse --short HEAD > git-hash   # the release commit's short hash
-git add -f git-hash                     # force-stage (the file is gitignored)
-cargo publish --allow-dirty             # tarball now carries git-hash
-git restore --staged git-hash && rm git-hash   # clean up; never commit it
-```
+To cut a release, after the release PR (version bump and CHANGELOG) is merged:
 
-`build.rs` prefers `git-hash` when present, so the installed binary reports the
-release commit instead of `unknown`. The GitHub release binaries do not need
-this step -- they build from a checkout (or receive `GITHUB_SHA` via
-`Cross.toml`) and already embed the hash.
+1. Publish from a clean checkout of the merge commit, so the package records
+   that commit and no local changes:
+
+   ```sh
+   git worktree add --detach ../driller-release <merge-commit>
+   cd ../driller-release && cargo publish --locked
+   ```
+
+2. Create the GitHub release on the same commit (`gh release create <version>
+   --target <merge-commit>`). The release workflow builds and uploads the
+   binaries and their `.sha256` files.
+3. Bump `Formula/driller.rb` in
+   [zoosky/homebrew-tap](https://github.com/zoosky/homebrew-tap): the three
+   release URLs and the three SHA-256 values, taken from the release's
+   `.sha256` files. Then check it with `brew upgrade driller && brew test
+   driller && brew audit --formula zoosky/tap/driller`.
 
 ## License
 
