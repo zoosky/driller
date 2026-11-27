@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.3] - 2026-11-27
+
+### Fixed
+- Mistakes in a request's method or headers stop the run when the plan
+  loads, before any request is sent. Before, the first request crashed the
+  whole run mid-load, or a wrong value was sent:
+  - an unsupported method (`method: OPTIONS`) reports `Unsupported method
+    "OPTIONS": use GET, POST, PUT, PATCH, DELETE or HEAD`;
+  - a header value with a line break or another control character reports
+    `Invalid value for header "Authorization": ...`. The usual cause is a `|`
+    block scalar, which keeps its final line break; use `|-`;
+  - two header names that differ only in case (`Accept` and `accept`) report
+    `Header "accept" is set twice (also as "Accept")`. Only one of the two
+    values could be sent, and which one changed from run to run.
+- A header value that gets a line break from a `{{ }}` interpolation (a
+  `with_items` entry, a CSV row or an `assign`ed response) fails that request
+  with `ERR invalid value for header <name>`, counted like a connection
+  error, and the run continues. Before, the whole run crashed.
+- Cookies are sent back exactly as the server set them. driller added quotes
+  around each value (`Cookie: sid="s0"` for `Set-Cookie: sid=s0`), so a
+  server that does not strip quotes saw a different session ID. Multiple
+  cookies are now separated by `"; "`, as RFC 6265 specifies. The example
+  server no longer strips quotes either, so the cookies example plan checks
+  this in CI.
+- Plan files reach the YAML parser unchanged. driller trimmed each file and
+  split it at every `---` followed by a line break before parsing, which
+  broke three things:
+  - a block scalar at the end of the file lost its final line break
+    (`body: |` sent `line one` instead of `line one` plus a newline; `|+`
+    lost all its trailing line breaks);
+  - a `---` line inside an indented block scalar, such as a Markdown rule in
+    a request body, split the plan and failed to parse;
+  - a multi-document file with Windows (CRLF) line endings failed to parse.
+
+  The YAML parser now finds the documents itself, at `---` and `...` markers,
+  as the YAML standard says. This applies to plans, included files and
+  `--compare` report files.
+
+### Added
+- Library: `driller::yaml::from_str_multi` parses every document of a YAML
+  stream with the same rules as `driller::yaml::from_str`.
+
+### Changed
+- Custom headers are sent in the order the plan lists them, instead of in a
+  different order on every run.
+- A parse error in a multi-document file says `failed to parse YAML content`,
+  like one in a single-document file, instead of `failed to parse YAML
+  document`.
+
 ## [0.14.2] - 2026-11-27
 
 ### Fixed
@@ -508,7 +557,8 @@ See [FORK.md](https://github.com/zoosky/driller/blob/main/FORK.md) for rationale
 - Benchmark YAML format and CLI flags are fully compatible with drill 0.9.0
 - Full upstream git history preserved
 
-[Unreleased]: https://github.com/zoosky/driller/compare/0.14.2...HEAD
+[Unreleased]: https://github.com/zoosky/driller/compare/0.14.3...HEAD
+[0.14.3]: https://github.com/zoosky/driller/compare/0.14.2...0.14.3
 [0.14.2]: https://github.com/zoosky/driller/compare/0.14.1...0.14.2
 [0.14.1]: https://github.com/zoosky/driller/compare/0.14.0...0.14.1
 [0.14.0]: https://github.com/zoosky/driller/compare/0.13.4...0.14.0

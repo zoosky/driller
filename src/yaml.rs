@@ -2,7 +2,8 @@
 //!
 //! This module is the single boundary between driller and its YAML crate.
 //! Every other module imports [`Value`], [`Mapping`], [`Number`], [`Error`],
-//! [`from_str`] and [`to_string`] from here rather than naming the crate, so
+//! [`from_str`], [`from_str_multi`] and [`to_string`] from here rather than
+//! naming the crate, so
 //! replacing the parser touches this file (and the characterization tests in
 //! `tests/yaml_moat.rs`), not the whole engine. Library users can name the same
 //! types, including the ones inside [`Value`]'s variants ([`Sequence`],
@@ -36,7 +37,8 @@
 //!
 //! # Limits
 //!
-//! [`from_str`] keeps the two limits `serde_yaml` enforced, for every target
+//! [`from_str`] and [`from_str_multi`] keep the two limits `serde_yaml`
+//! enforced, for every target
 //! type, so hostile input still fails fast: nesting deeper than 128 levels, and
 //! alias expansion beyond 100 jumps per parser event (which stops "billion
 //! laughs" documents). It lifts noyalib's other default budgets (node,
@@ -59,7 +61,8 @@
 //!
 //! # Errors
 //!
-//! [`from_str`] returns an [`Error`] for malformed YAML, for duplicate keys,
+//! [`from_str`] and [`from_str_multi`] return an [`Error`] for malformed YAML,
+//! for duplicate keys,
 //! for keys that collide or are not scalars, and when a limit above is
 //! exceeded. Driller wraps it in [`crate::Error::Yaml`] together with the parse
 //! context.
@@ -136,7 +139,45 @@ where
   Ok(*parsed.downcast::<T>().expect("T is Value or Mapping, checked by TypeId above"))
 }
 
-/// The parser configuration behind [`from_str`].
+/// Parses every document of a YAML stream into a [`Value`].
+///
+/// The YAML parser finds the documents, so only a `---` or `...` marker at the
+/// start of a line separates them, as the YAML standard says. A `---` line
+/// inside an indented block scalar is content, and each document keeps its
+/// exact text: a block scalar at the end of the file keeps its final line
+/// break. Windows (CRLF) line endings work like `\n`.
+///
+/// Uses the same parser settings as [`from_str`]: duplicate keys are an error,
+/// the limits in the [module docs](self) apply to the whole stream, and tags
+/// are removed from every document. An empty or comment-only document is
+/// returned as [`Value::Null`]; an empty stream returns no documents.
+///
+/// # Examples
+///
+/// ```
+/// use driller::yaml::{self, Value};
+///
+/// let docs = yaml::from_str_multi("---\na: 1\n---\nbody: |\n  intro\n  ---\n  end\n").unwrap();
+/// assert_eq!(docs.len(), 2);
+/// assert_eq!(docs[1]["body"].as_str(), Some("intro\n---\nend\n"));
+/// ```
+///
+/// # Errors
+///
+/// Returns an [`Error`] for malformed YAML in any document, duplicate or
+/// colliding keys, non-scalar keys, or an exceeded limit. Its
+/// [`Error::location`] counts lines from the start of the stream.
+pub fn from_str_multi(s: &str) -> Result<Vec<Value>, Error> {
+  let docs: Vec<Value> = noyalib::load_all_as_with_config(s, &parser_config()).map_err(|e| Error::from_noyalib_with_input(e, s))?;
+  // A tag needs a `!` somewhere in the text; skip the rebuild otherwise.
+  Ok(if s.contains('!') {
+    docs.into_iter().map(Value::untag).collect()
+  } else {
+    docs
+  })
+}
+
+/// The parser configuration behind [`from_str`] and [`from_str_multi`].
 ///
 /// Starts from noyalib's `serde_yaml` compatibility profile (scalar resolution,
 /// error shape, depth 128 and the 100-jumps-per-event alias rule) and removes

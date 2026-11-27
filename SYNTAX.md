@@ -48,8 +48,8 @@ All those three items can be combined with `name` property to be show in logs.
 ## Request item properties
 
 - `url`: Url to be request for this item
-- `headers`: List of custom headers you want to add in the requests.
-- `method`: HTTP method in the requests. Valid methods are GET, POST, PUT, PATCH, HEAD or DELETE. (default: GET)
+- `headers`: List of custom headers you want to add in the requests, sent in the order listed. Header names are case-insensitive, so set each header once: `Accept` and `accept` are the same header, and listing both stops the run when the plan loads. Values cannot contain line breaks: write a multi-line value as `|-` or `>-`, not `|`, which keeps its final line break. A value that only gets a line break through a `{{ }}` interpolation (from `with_items` or a CSV row, say) fails that request with `ERR invalid value for header <name>`, and the run continues.
+- `method`: HTTP method in the requests. Valid methods are GET, POST, PUT, PATCH, HEAD or DELETE, in any case. Any other method stops the run when the plan loads. (default: GET)
 - `body`: Request body for methods like POST, PUT or PATCH.
 - `with_items`: List of items to be interpolated in the given request url.
 - `with_items_range`: Generates items from an iterator from start, step (optional, default: 1), stop.
