@@ -14,34 +14,23 @@ use std::process::Command;
 fn main() {
   // Short git commit hash, resolved in priority order:
   //
-  //   1. `git rev-parse --short HEAD` -- authoritative for any build from a
-  //      checkout with a `.git`. It can fail to spawn (no git on PATH), exit
-  //      non-zero (not a working tree, or "dubious ownership" in a CI
-  //      checkout), or return nothing; in every such case the output is empty
-  //      and must not be embedded verbatim (that is how a release binary once
-  //      printed `0.10.2 ()`). Trying git first means a stray `git-hash` file
-  //      left over in a working tree can never shadow the real commit.
-  //   2. A packaged `git-hash` file. A `cargo install` from crates.io builds
-  //      from the published tarball, which strips `.git`, so `git rev-parse`
-  //      finds nothing and the hash must travel *inside* the package. The
-  //      release/publish step writes the short hash to `git-hash` and stages it
-  //      so `cargo publish` includes it (see CONTRIBUTING.md). This file is
-  //      absent in normal checkouts, where step 1 already answered.
+  //   1. `.cargo_vcs_info.json` -- `cargo package` / `cargo publish` writes
+  //      this file into every published crate with the full commit hash, so a
+  //      `cargo install` from crates.io (which builds from the tarball, with
+  //      no `.git`) still knows its commit. The file exists only in packaged
+  //      sources, never in a checkout, so it is authoritative when present.
+  //      Checking it before git also keeps a crate unpacked inside some other
+  //      repository (a vendored dependency, or a home directory under version
+  //      control) from embedding that repository's HEAD.
+  //   2. `git rev-parse --short HEAD` -- any build from a checkout. It can
+  //      fail to spawn (no git on PATH), exit non-zero (not a working tree, or
+  //      "dubious ownership" in a CI checkout), or return nothing; in every
+  //      such case the output is empty and must not be embedded verbatim
+  //      (that is how a release binary once printed `0.10.2 ()`).
   //   3. GitHub Actions' `GITHUB_SHA` (short) -- containers without `git`,
   //      e.g. the `cross` musl build (forwarded via Cross.toml).
   //   4. "unknown", only when every source above is unavailable.
-  let git_hash = Command::new("git")
-    .args(["rev-parse", "--short", "HEAD"])
-    .output()
-    .ok()
-    .filter(|o| o.status.success())
-    .and_then(|o| String::from_utf8(o.stdout).ok())
-    .map(|s| s.trim().to_string())
-    .filter(|s| !s.is_empty())
-    .or_else(|| std::fs::read_to_string("git-hash").ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()))
-    .or_else(|| std::env::var("GITHUB_SHA").ok().map(|s| s.chars().take(7).collect::<String>()))
-    .filter(|s| !s.is_empty())
-    .unwrap_or_else(|| "unknown".to_string());
+  let git_hash = packaged_commit_hash().or_else(checkout_commit_hash).or_else(ci_commit_hash).unwrap_or_else(|| "unknown".to_string());
 
   println!("cargo:rustc-env=GIT_HASH={git_hash}");
 
@@ -73,14 +62,61 @@ fn main() {
   // sync with the working tree without needing `cargo clean`.
   println!("cargo:rerun-if-changed=.git/HEAD");
   println!("cargo:rerun-if-changed=.git/refs/heads/");
-  // Only watch `git-hash` when it actually exists (the publish/tarball path).
-  // Listing a path that does not exist makes Cargo treat the build script as
-  // always-dirty and rerun it on every build, which -- because this script
-  // emits a fresh BUILD_TIME each run -- would recompile the crate on every
-  // `cargo build` in a normal checkout.
-  if std::path::Path::new("git-hash").exists() {
-    println!("cargo:rerun-if-changed=git-hash");
+  // `.cargo_vcs_info.json` is not watched: it exists only in a packaged
+  // crate, whose sources never change. Listing a path that does not exist
+  // would make Cargo rerun this script on every build in a checkout, and the
+  // fresh BUILD_TIME would then recompile the crate each time.
+}
+
+/// Reads the release commit from the `.cargo_vcs_info.json` that `cargo
+/// package` writes into a published crate, returned as a 7-character short
+/// hash (`b1f7df3`), with `-dirty` appended when the crate was published from
+/// a working tree with uncommitted changes.
+///
+/// The file looks like `{"git": {"sha1": "<40 hex digits>", "dirty": true},
+/// "path_in_vcs": ""}` (`dirty` appears only when true). It is scanned by hand
+/// so the build script stays dependency-free.
+///
+/// Returns `None` when the file is absent (any checkout) or holds no
+/// recognisable hash.
+fn packaged_commit_hash() -> Option<String> {
+  let text = std::fs::read_to_string(".cargo_vcs_info.json").ok()?;
+  let after_key = &text[text.find("\"sha1\"")? + "\"sha1\"".len()..];
+  let value = &after_key[after_key.find('"')? + 1..];
+  let hash: String = value.chars().take_while(char::is_ascii_hexdigit).collect();
+  if hash.len() < 7 {
+    return None;
   }
+  let dirty = text.replace(char::is_whitespace, "").contains("\"dirty\":true");
+  let suffix = if dirty {
+    "-dirty"
+  } else {
+    ""
+  };
+  Some(format!("{}{suffix}", &hash[..7]))
+}
+
+/// Runs `git rev-parse --short HEAD` for a build from a checkout.
+///
+/// Returns `None` when git cannot be spawned, exits non-zero (not a working
+/// tree, or "dubious ownership" in a CI checkout), or prints nothing, so an
+/// empty hash is never embedded.
+fn checkout_commit_hash() -> Option<String> {
+  let output = Command::new("git").args(["rev-parse", "--short", "HEAD"]).output().ok()?;
+  if !output.status.success() {
+    return None;
+  }
+  let hash = String::from_utf8(output.stdout).ok()?.trim().to_string();
+  (!hash.is_empty()).then_some(hash)
+}
+
+/// Shortens GitHub Actions' `GITHUB_SHA` to 7 characters, for container builds
+/// without git (the `cross` musl build, which receives it via Cross.toml).
+///
+/// Returns `None` when the variable is unset or empty.
+fn ci_commit_hash() -> Option<String> {
+  let hash: String = std::env::var("GITHUB_SHA").ok()?.chars().take(7).collect();
+  (!hash.is_empty()).then_some(hash)
 }
 
 /// Converts days since the Unix epoch (1970-01-01) into a calendar

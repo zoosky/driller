@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.14.1] - 2026-11-26
+## [0.14.2] - 2026-11-27
+
+### Fixed
+- `driller --version` shows the release commit again for `cargo install
+  driller` builds. Crates.io releases 0.13.0 to 0.14.1 printed `unknown`
+  instead (`driller 0.14.1 (unknown ...)`), because the hash had to be added to
+  the package by hand at publish time and that step was skipped. `build.rs` now
+  reads it from the `.cargo_vcs_info.json` file that `cargo publish` writes
+  into every package, so no manual step is left. Release binaries and
+  Homebrew installs were not affected.
+- The 0.14.1 entry below is dated 2026-11-27, the day it was released.
+
+## [0.14.1] - 2026-11-27
 
 ### Fixed
 - YAML tags no longer break plans. Since 0.14.0, a tagged value such as
@@ -496,7 +508,8 @@ See [FORK.md](https://github.com/zoosky/driller/blob/main/FORK.md) for rationale
 - Benchmark YAML format and CLI flags are fully compatible with drill 0.9.0
 - Full upstream git history preserved
 
-[Unreleased]: https://github.com/zoosky/driller/compare/0.14.1...HEAD
+[Unreleased]: https://github.com/zoosky/driller/compare/0.14.2...HEAD
+[0.14.2]: https://github.com/zoosky/driller/compare/0.14.1...0.14.2
 [0.14.1]: https://github.com/zoosky/driller/compare/0.14.0...0.14.1
 [0.14.0]: https://github.com/zoosky/driller/compare/0.13.4...0.14.0
 [0.13.4]: https://github.com/zoosky/driller/compare/0.13.3...0.13.4
