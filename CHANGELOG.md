@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.3] - 2026-11-27
+
+### Fixed
+- Mistakes in a request's method or headers stop the run when the plan
+  loads, before any request is sent. Before, the first request crashed the
+  whole run mid-load, or a wrong value was sent:
+  - an unsupported method (`method: OPTIONS`) reports `Unsupported method
+    "OPTIONS": use GET, POST, PUT, PATCH, DELETE or HEAD`;
+  - a header value with a line break or another control character reports
+    `Invalid value for header "Authorization": ...`. The usual cause is a `|`
+    block scalar, which keeps its final line break; use `|-`;
+  - two header names that differ only in case (`Accept` and `accept`) report
+    `Header "accept" is set twice (also as "Accept")`. Only one of the two
+    values could be sent, and which one changed from run to run.
+- A header value that gets a line break from a `{{ }}` interpolation (a
+  `with_items` entry, a CSV row or an `assign`ed response) fails that request
+  with `ERR invalid value for header <name>`, counted like a connection
+  error, and the run continues. Before, the whole run crashed.
+
+### Changed
+- Custom headers are sent in the order the plan lists them, instead of in a
+  different order on every run.
+
 ## [0.14.2] - 2026-11-27
 
 ### Fixed
@@ -508,7 +531,8 @@ See [FORK.md](https://github.com/zoosky/driller/blob/main/FORK.md) for rationale
 - Benchmark YAML format and CLI flags are fully compatible with drill 0.9.0
 - Full upstream git history preserved
 
-[Unreleased]: https://github.com/zoosky/driller/compare/0.14.2...HEAD
+[Unreleased]: https://github.com/zoosky/driller/compare/0.14.3...HEAD
+[0.14.3]: https://github.com/zoosky/driller/compare/0.14.2...0.14.3
 [0.14.2]: https://github.com/zoosky/driller/compare/0.14.1...0.14.2
 [0.14.1]: https://github.com/zoosky/driller/compare/0.14.0...0.14.1
 [0.14.0]: https://github.com/zoosky/driller/compare/0.13.4...0.14.0

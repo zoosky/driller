@@ -38,8 +38,10 @@ pub struct Request {
   name: String,
   url: String,
   time: f64,
-  method: String,
-  headers: HashMap<String, String>,
+  method: Method,
+  /// Custom headers in plan order: the validated name and the value template,
+  /// which is interpolated per request.
+  headers: Vec<(HeaderName, String)>,
   pub body: Option<Body>,
   pub with_item: Option<YamlValue>,
   pub index: Option<u32>,
@@ -80,8 +82,8 @@ impl Request {
       name: name.to_string(),
       url: url.to_string(),
       time: 0.0,
-      method: "GET".to_string(),
-      headers: HashMap::new(),
+      method: Method::GET,
+      headers: Vec::new(),
       body: None,
       with_item: None,
       index: None,
@@ -99,14 +101,13 @@ impl Request {
     let url = extract(request_val, "url");
     let assign = extract_optional(item, "assign");
 
-    let method = if let Some(v) = extract_optional(request_val, "method") {
-      v.to_uppercase()
-    } else {
-      "GET".to_string()
+    let method = match extract_optional(request_val, "method") {
+      Some(value) => parse_method(&value),
+      None => Method::GET,
     };
 
-    let body_verbs = ["POST", "PATCH", "PUT"];
-    let body = if body_verbs.contains(&method.as_str()) {
+    let body_verbs = [Method::POST, Method::PATCH, Method::PUT];
+    let body = if body_verbs.contains(&method) {
       if let Some(body) = request_val.get("body").and_then(|v| v.as_str()) {
         Some(Body::Template(body.to_string()))
       } else if let Some(file_path) = request_val.get("body").and_then(|v| v.get("file")).and_then(|v| v.as_str()) {
@@ -123,9 +124,13 @@ impl Request {
       None
     };
 
-    let mut headers = HashMap::new();
+    let mut headers: Vec<(HeaderName, String)> = Vec::new();
 
     if let Some(mapping) = request_val.get("headers").and_then(|v| v.as_mapping()) {
+      // The name each header was first written with, to report a second
+      // spelling of the same (case-insensitive) name.
+      let mut spellings: HashMap<HeaderName, &str> = HashMap::new();
+
       for (key, val) in mapping.iter() {
         // Mapping keys are always strings, so a key such as `1:` arrives as "1".
         // A missing or null key (`: value`, `~:`, `null:`) arrives as "null".
@@ -135,14 +140,23 @@ impl Request {
         if key == "null" {
           panic!("{} Header name is empty or null!!", "WARNING!".yellow().bold());
         }
-        if HeaderName::from_bytes(key.as_bytes()).is_err() {
+        let Ok(name) = HeaderName::from_bytes(key.as_bytes()) else {
           panic!("{} Invalid header name {key:?}: header names must be non-empty and use only token characters!!", "WARNING!".yellow().bold());
-        }
-        if let Some(vs) = val.as_str() {
-          headers.insert(key.clone(), vs.to_string());
-        } else {
+        };
+        let Some(value) = val.as_str() else {
           panic!("{} Headers must be strings!!", "WARNING!".yellow().bold());
+        };
+        // HTTP header names are case-insensitive, so `Accept` and `accept` are
+        // one header; only one of the two values could be sent.
+        if let Some(first) = spellings.insert(name.clone(), key) {
+          panic!("{} Header {key:?} is set twice (also as {first:?}): header names are case-insensitive, so set each header once!!", "WARNING!".yellow().bold());
         }
+        // `{{` and `}}` are valid header characters, so checking the template
+        // catches every invalid character outside the interpolations.
+        if HeaderValue::from_str(value).is_err() {
+          panic!("{} Invalid value for header {key:?}: header values cannot contain line breaks or other control characters (a `|` block scalar keeps its final line break; use `|-`)!!", "WARNING!".yellow().bold());
+        }
+        headers.push((name, value.to_string()));
       }
     }
 
@@ -207,16 +221,7 @@ impl Request {
 
     let interpolated_body;
 
-    // Method
-    let method = match self.method.to_uppercase().as_ref() {
-      "GET" => Method::GET,
-      "POST" => Method::POST,
-      "PUT" => Method::PUT,
-      "PATCH" => Method::PATCH,
-      "DELETE" => Method::DELETE,
-      "HEAD" => Method::HEAD,
-      _ => panic!("Unknown method '{}'", self.method),
-    };
+    let method = self.method.clone();
 
     // Clone Client out of the Pool lock so RequestBuilder construction does not run under the Mutex.
     let client = {
@@ -244,10 +249,23 @@ impl Request {
       headers.insert(header::COOKIE, HeaderValue::from_str(&cookie).unwrap());
     }
 
-    // Resolve headers
-    for (key, val) in self.headers.iter() {
+    // Resolve headers. Names and the literal parts of values were checked when
+    // the plan loaded; an interpolated value can still bring in a line break
+    // (from `with_items`, a CSV row or an `assign`ed response). That request
+    // fails like a connection error instead of stopping the whole run.
+    for (name, val) in self.headers.iter() {
       let interpolated_header = uninterpolator.get_or_insert(interpolator::Interpolator::new(context)).resolve(val, !config.relaxed_interpolations);
-      headers.insert(HeaderName::from_bytes(key.as_bytes()).unwrap(), HeaderValue::from_str(&interpolated_header).unwrap());
+      match HeaderValue::from_str(&interpolated_header) {
+        Ok(value) => {
+          headers.insert(name.clone(), value);
+        }
+        Err(_) => {
+          if !config.quiet || config.verbose {
+            log_invalid_header_value(&interpolated_name, interpolated_base_url.as_str(), name, config);
+          }
+          return (None, 0.0);
+        }
+      }
     }
 
     let request_builder = request.headers(headers).timeout(Duration::from_secs(config.timeout));
@@ -477,6 +495,40 @@ fn log_request_failure(name: &str, url: &str, duration_ms: f64, error: &reqwest:
   println!("{:width$} {} {} {}", name.green(), url.blue().bold(), format!("ERR {label}").red(), Request::format_time(duration_ms, config.nanosec).cyan(), width = 25);
   if config.verbose {
     println!("  {} {}", "cause:".dimmed(), error_source_chain(error));
+  }
+}
+
+/// Prints the failure line for a request that was not sent because an
+/// interpolated header value is not a valid HTTP header value.
+///
+/// Same layout as [`log_request_failure`], with `ERR invalid value for header
+/// <name>` in place of the connection error; under `--verbose` a `cause:` line
+/// says why.
+fn log_invalid_header_value(name: &str, url: &str, header: &HeaderName, config: &Config) {
+  println!("{:width$} {} {} {}", name.green(), url.blue().bold(), format!("ERR invalid value for header {header}").red(), Request::format_time(0.0, config.nanosec).cyan(), width = 25);
+  if config.verbose {
+    println!("  {} the interpolated value contains a line break or another control character", "cause:".dimmed());
+  }
+}
+
+/// Maps a plan's `method:` value to the HTTP method driller sends.
+///
+/// The value is case-insensitive (`post` works like `POST`). It is not
+/// interpolated, so it is checked once, when the plan is loaded.
+///
+/// # Panics
+///
+/// Panics with a plan error that lists the supported methods when the value is
+/// anything else, so the run stops before any request is sent.
+fn parse_method(value: &str) -> Method {
+  match value.to_uppercase().as_str() {
+    "GET" => Method::GET,
+    "POST" => Method::POST,
+    "PUT" => Method::PUT,
+    "PATCH" => Method::PATCH,
+    "DELETE" => Method::DELETE,
+    "HEAD" => Method::HEAD,
+    _ => panic!("{} Unsupported method {value:?}: use GET, POST, PUT, PATCH, DELETE or HEAD!!", "WARNING!".yellow().bold()),
   }
 }
 
@@ -751,8 +803,76 @@ request:
     let yaml: YamlValue = crate::yaml::from_str("name: test_request\nrequest:\n  url: http://example.com\n  headers:\n    X-Trace: abc\n    1: one\n").unwrap();
     let request = Request::new(&yaml, None, None);
 
-    assert_eq!(request.headers.get("X-Trace").map(String::as_str), Some("abc"));
-    assert_eq!(request.headers.get("1").map(String::as_str), Some("one"));
+    let headers: Vec<(&str, &str)> = request.headers.iter().map(|(name, value)| (name.as_str(), value.as_str())).collect();
+    assert_eq!(headers, [("x-trace", "abc"), ("1", "one")]);
+  }
+
+  fn request_from(yaml: &str) -> Request {
+    let item: YamlValue = crate::yaml::from_str(yaml).unwrap();
+    Request::new(&item, None, None)
+  }
+
+  #[test]
+  #[should_panic(expected = "Unsupported method \"OPTIONS\"")]
+  fn unsupported_method_is_rejected_when_the_plan_loads() {
+    request_from("name: test_request\nrequest:\n  url: http://example.com\n  method: OPTIONS\n");
+  }
+
+  #[test]
+  fn method_is_case_insensitive() {
+    let request = request_from("name: test_request\nrequest:\n  url: http://example.com\n  method: delete\n");
+    assert_eq!(request.method, Method::DELETE);
+  }
+
+  #[test]
+  #[should_panic(expected = "Invalid value for header \"Authorization\"")]
+  fn header_value_with_a_line_break_is_rejected_when_the_plan_loads() {
+    // A `|` block scalar keeps its final line break.
+    request_from("name: test_request\nrequest:\n  url: http://example.com\n  headers:\n    Authorization: |\n      Bearer abc\n    Accept: application/json\n");
+  }
+
+  #[test]
+  #[should_panic(expected = "Invalid value for header \"X-Trace\"")]
+  fn line_break_outside_an_interpolation_is_rejected_when_the_plan_loads() {
+    request_from("name: test_request\nrequest:\n  url: http://example.com\n  headers:\n    X-Trace: \"{{ item }}\\n\"\n");
+  }
+
+  #[test]
+  fn block_scalar_without_its_line_break_is_accepted() {
+    let request = request_from("name: test_request\nrequest:\n  url: http://example.com\n  headers:\n    Authorization: |-\n      Bearer abc\n    Accept: application/json\n");
+    assert_eq!(request.headers[0].1, "Bearer abc");
+  }
+
+  #[test]
+  #[should_panic(expected = "Header \"accept\" is set twice (also as \"Accept\")")]
+  fn header_names_that_differ_only_in_case_are_rejected() {
+    request_from("name: test_request\nrequest:\n  url: http://example.com\n  headers:\n    Accept: application/json\n    accept: text/html\n");
+  }
+
+  #[test]
+  fn headers_keep_plan_order() {
+    let request = request_from("name: test_request\nrequest:\n  url: http://example.com\n  headers:\n    X-B: b\n    X-A: a\n    X-C: c\n");
+    let names: Vec<&str> = request.headers.iter().map(|(name, _)| name.as_str()).collect();
+    assert_eq!(names, ["x-b", "x-a", "x-c"]);
+  }
+
+  #[test]
+  fn invalid_interpolated_header_value_fails_the_request_without_panicking() {
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+
+    // Port 9 (discard) is never contacted: the request fails before it is sent.
+    let request = request_from("name: bad header\nrequest:\n  url: http://127.0.0.1:9/x\n  headers:\n    X-Trace: \"{{ trace }}\"\n");
+    let mut context: Context = Context::new();
+    context.insert("trace".to_string(), json!("bad\nvalue"));
+    let pool: Pool = Arc::new(Mutex::new(HashMap::new()));
+    let config = test_config();
+
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    let (response, duration_ms) = runtime.block_on(request.send_request(&mut context, &pool, &config));
+
+    assert!(response.is_none(), "a request with an invalid header value must fail");
+    assert_eq!(duration_ms, 0.0);
   }
 
   #[test]
