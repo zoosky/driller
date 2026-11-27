@@ -565,23 +565,41 @@ mod key_handling {
   }
 
   #[test]
-  fn duplicate_keys_keep_the_last_entry_for_hashmap_targets() {
-    // serde_yaml 0.9 kept the last entry for typed map targets; so does
-    // driller::yaml::from_str.
-    let map: std::collections::HashMap<String, i32> = yaml::from_str("a: 1\na: 2\n").unwrap();
-    assert_eq!(map.get("a"), Some(&2));
+  fn duplicate_keys_are_a_parse_error_for_hashmap_targets() {
+    // serde_yaml 0.9 kept the last entry for typed map targets. YAML 1.2
+    // requires unique keys, and driller::yaml::from_str rejects the duplicate
+    // for every target type.
+    let err = yaml::from_str::<std::collections::HashMap<String, i32>>("a: 1\na: 2\n").unwrap_err();
+    assert!(err.to_string().contains("duplicate entry with key \"a\""), "{err}");
+    let location = err.location().expect("duplicate-key error has a location");
+    assert_eq!((location.line(), location.column()), (2, 1));
   }
 
   #[test]
   fn duplicate_struct_field_is_an_error() {
-    // serde_yaml 0.9: `duplicate field `a``.
+    // serde_yaml 0.9: ``duplicate field `a` ``.
     #[derive(Debug, serde::Deserialize)]
     #[allow(dead_code)]
     struct S {
       a: i32,
     }
     let err = yaml::from_str::<S>("a: 1\na: 2\n").unwrap_err();
-    assert!(err.to_string().contains("duplicate field"), "{err}");
+    assert!(err.to_string().contains("duplicate entry with key \"a\""), "{err}");
+    let location = err.location().expect("duplicate-key error has a location");
+    assert_eq!((location.line(), location.column()), (2, 1));
+  }
+
+  #[test]
+  fn duplicate_keys_inside_a_typed_target_are_a_parse_error() {
+    // A nested map deserialized into a HashMap field, as a library caller
+    // reading headers into a struct would.
+    #[derive(Debug, serde::Deserialize)]
+    #[allow(dead_code)]
+    struct Request {
+      headers: std::collections::HashMap<String, String>,
+    }
+    let err = yaml::from_str::<Request>("headers:\n  Accept: a\n  Accept: b\n").unwrap_err();
+    assert!(err.to_string().contains("duplicate entry with key \"Accept\""), "{err}");
   }
 
   #[test]
@@ -684,10 +702,11 @@ mod continuation_indentation {
 // ---------------------------------------------------------------------------
 // Parser limits
 //
-// mirrors: src/yaml.rs `parser_config`, used by every parse (plans, CSV-free
-// with_items lists, and src/checker.rs reading `--report` baselines for
-// `--compare`). serde_yaml 0.9 enforced only nesting depth and the alias
-// expansion factor; noyalib's other default budgets would reject real input.
+// mirrors: src/yaml.rs `parser_config`, used by every parse and every target
+// type (plans, CSV-free with_items lists, src/checker.rs reading `--report`
+// baselines for `--compare`, and library callers parsing into their own
+// types). serde_yaml 0.9 enforced only nesting depth and the alias expansion
+// factor; noyalib's other default budgets would reject real input.
 // ---------------------------------------------------------------------------
 mod limits {
   use super::*;
@@ -725,6 +744,22 @@ mod limits {
     }
     let v: Value = yaml::from_str(&src).unwrap();
     assert_eq!(v["with_items"].as_sequence().unwrap().len(), 70_000);
+  }
+
+  #[test]
+  fn typed_targets_get_the_same_limits() {
+    // noyalib's own compat from_str applies its default max_sequence_length
+    // (65,536) and other budgets to typed targets; driller::yaml::from_str
+    // lifts them for every target, and keeps the depth limit.
+    let mut src = String::new();
+    for i in 0..70_000 {
+      src.push_str(&format!("- {i}\n"));
+    }
+    let v: Vec<i64> = yaml::from_str(&src).unwrap();
+    assert_eq!(v.len(), 70_000);
+
+    let deep = format!("{}1{}", "[".repeat(200), "]".repeat(200));
+    assert!(yaml::from_str::<Vec<Value>>(&deep).is_err());
   }
 
   #[test]

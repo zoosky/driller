@@ -27,10 +27,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with key "url" at line 6 column 7`), and every YAML error position now counts
   lines from the top of the file. Plans that start with `---` or contain
   several documents used to report lines too low.
-- `driller::yaml::from_str` handles typed targets the way `serde_yaml` did: a
-  repeated struct field is an error and a `HashMap` keeps the last entry
-  (0.14.0 rejected every duplicate). `Value` and `Mapping` results still reject
-  duplicates and have their tags removed; tags inside other targets are kept.
 - The README and the getting-started guide no longer say driller links
   OpenSSL. TLS uses rustls; no OpenSSL headers are needed to build from source
   (a C compiler is, for rustls' bundled cryptography library).
@@ -45,6 +41,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accepted these. Indent the continuation lines, or write the body as a block
   scalar (`body: |`); `SYNTAX.md` shows an example. This comes from the YAML
   parser and cannot be switched off in driller.
+- **Library, since 0.14.0:** `driller::yaml::from_str` rejects a duplicate key
+  for every target type, as YAML 1.2 requires, with the error
+  `duplicate entry with key "a"` and the duplicate's position. With
+  `serde_yaml`, a `HashMap` or other typed map kept the last entry, and a
+  repeated struct field failed with ``duplicate field `a` ``. The 0.14.0 notes
+  did not mention this. Tags are removed only from `Value` and `Mapping`
+  results; tags inside other targets are kept.
 
 ### Added
 - Homebrew: `brew install zoosky/tap/driller` installs the release binaries on
