@@ -38,7 +38,7 @@ pub enum Error {
   /// A YAML document failed to parse. `what` distinguishes the parse context
   /// (`"document"` for one record of a multi-document file, `"content"` for the
   /// whole file).
-  #[error("failed to parse YAML {what}: {source}")]
+  #[error("failed to parse YAML {what}: {}", yaml_message(source))]
   Yaml {
     /// The parse context, used in the message.
     what: &'static str,
@@ -58,7 +58,7 @@ pub enum Error {
   #[error("node missing on config: {0}")]
   MissingNode(String),
   /// A document expected to be a sequence of items was something else; carries
-  /// a debug rendering of what was found.
+  /// the kind of value found (for example `a mapping`).
   #[error("expected document to be a sequence, got: {0}")]
   NotASequence(String),
   /// The expanded plan contained no runnable items.
@@ -84,10 +84,63 @@ pub enum Error {
   Regressions(usize),
 }
 
+/// Formats a YAML parse error for [`Error::Yaml`], adding the position when
+/// the YAML crate's own message does not include one.
+///
+/// Most noyalib messages already end in `at line L column C`. Some, such as
+/// duplicate keys, keep the position only in [`crate::yaml::Error::location`];
+/// without it a user cannot find the duplicate in a large plan.
+fn yaml_message(source: &crate::yaml::Error) -> String {
+  let message = source.to_string();
+  let Some(location) = source.location() else {
+    return message;
+  };
+  let (line, column) = (location.line(), location.column());
+  // noyalib ends a positioned message with "line L column C" (or "line L,
+  // column C"). Check the end only: key text quoted inside the message can
+  // itself contain "at line".
+  let positioned = message.ends_with(&format!("line {line} column {column}")) || message.ends_with(&format!("line {line}, column {column}"));
+  if positioned {
+    message
+  } else {
+    format!("{message} at line {line} column {column}")
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::Error;
   use std::error::Error as _;
+
+  #[test]
+  fn yaml_error_gets_a_position_when_the_message_has_none() {
+    let source = crate::yaml::from_str::<crate::yaml::Value>("a: 1\na: 2\n").unwrap_err();
+    let err = Error::Yaml {
+      what: "content",
+      source,
+    };
+    assert_eq!(err.to_string(), "failed to parse YAML content: duplicate entry with key \"a\" at line 2 column 1");
+  }
+
+  #[test]
+  fn key_text_containing_at_line_does_not_hide_the_position() {
+    let source = crate::yaml::from_str::<crate::yaml::Value>("\"x at line 9\": 1\n\"x at line 9\": 2\n").unwrap_err();
+    let err = Error::Yaml {
+      what: "content",
+      source,
+    };
+    assert!(err.to_string().ends_with("at line 2 column 1"), "{err}");
+  }
+
+  #[test]
+  fn yaml_error_that_already_has_a_position_is_not_repeated() {
+    let source = crate::yaml::from_str::<crate::yaml::Value>("1: x\n\"1\": y\n").unwrap_err();
+    let err = Error::Yaml {
+      what: "content",
+      source,
+    };
+    assert_eq!(err.to_string().matches("line ").count(), 1, "{err}");
+  }
 
   /// The context-free variants render byte-for-byte the strings the CLI and
   /// tests depend on.

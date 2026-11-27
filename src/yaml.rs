@@ -19,17 +19,29 @@
 //!   `~:`, `null:` or an empty key (`: value`) is `"null"`.
 //! - Two keys that become the same string (`1:` and `"1":`) are a parse error,
 //!   and so is a sequence or mapping used as a key.
-//! - [`to_string`] output has no trailing newline and indents sequence items
-//!   under their key.
+//! - A duplicate key is a parse error for every target type, as YAML 1.2
+//!   requires. `serde_yaml` kept the last entry when parsing into a `HashMap`
+//!   or another typed map.
+//! - Tags are removed when a document is parsed into a [`Value`]: `url: !path
+//!   /x` reads as the string `/x`, and `!!binary` / `!!timestamp` values as
+//!   their text, which is what `serde_yaml`'s accessors returned.
+//! - A multi-line quoted string or flow collection must indent its
+//!   continuation lines deeper than the key it belongs to. `serde_yaml`
+//!   (libyaml) also accepted a closing `}'` or `]` at the key's own indent;
+//!   noyalib rejects it. Indent the continuation, or use a block scalar
+//!   (`body: |`).
+//! - [`to_string`] output usually has no trailing newline (a value that ends
+//!   in a block scalar keeps its newline) and indents sequence items under
+//!   their key.
 //!
 //! # Limits
 //!
-//! [`from_str`] keeps the two limits `serde_yaml` enforced, so hostile input
-//! still fails fast: nesting deeper than 128 levels, and alias expansion beyond
-//! 100 jumps per parser event (which stops "billion laughs" documents). It
-//! lifts noyalib's other default budgets (node, sequence, mapping, size and
-//! alias-count caps), which `serde_yaml` did not have and which real plans and
-//! large `--report` files exceed.
+//! [`from_str`] keeps the two limits `serde_yaml` enforced, for every target
+//! type, so hostile input still fails fast: nesting deeper than 128 levels, and
+//! alias expansion beyond 100 jumps per parser event (which stops "billion
+//! laughs" documents). It lifts noyalib's other default budgets (node,
+//! sequence, mapping, size and alias-count caps), which `serde_yaml` did not
+//! have and which real plans and large `--report` files exceed.
 //!
 //! # Examples
 //!
@@ -47,18 +59,27 @@
 //!
 //! # Errors
 //!
-//! [`from_str`] returns an [`Error`] for malformed YAML, for keys that collide
-//! or are not scalars, and when a limit above is exceeded. Driller wraps it in
-//! [`crate::Error::Yaml`] together with the parse context.
+//! [`from_str`] returns an [`Error`] for malformed YAML, for duplicate keys,
+//! for keys that collide or are not scalars, and when a limit above is
+//! exceeded. Driller wraps it in [`crate::Error::Yaml`] together with the parse
+//! context.
 
 pub use noyalib::compat::serde_yaml::{Error, Location, Mapping, Number, Sequence, Tag, TaggedValue, Value, to_string};
+use std::any::{Any, TypeId};
+
 use noyalib::{DuplicateKeyPolicy, ParserConfig};
 
 /// Parses a YAML document into `T` (driller always uses [`Value`]).
 ///
-/// This is `noyalib`'s `serde_yaml`-compatible parse, with the limits described
-/// in the [module docs](self): `serde_yaml`'s depth and alias-expansion limits
-/// stay, noyalib's extra size budgets are lifted.
+/// Every target type is parsed with `noyalib`'s `serde_yaml`-compatible
+/// settings and the limits described in the [module docs](self)
+/// (`serde_yaml`'s depth and alias-expansion limits stay, noyalib's extra size
+/// budgets are lifted). A duplicate key is an error wherever it appears,
+/// whether the target is a [`Value`], a struct or a `HashMap`.
+///
+/// For [`Value`] and [`Mapping`] targets, tags are removed from the whole tree.
+/// Any other target (a struct, a `HashMap`, a `Vec<Value>`, ...) keeps the tags
+/// inside the result.
 ///
 /// # Examples
 ///
@@ -72,25 +93,56 @@ use noyalib::{DuplicateKeyPolicy, ParserConfig};
 /// }
 /// let doc: Value = yaml::from_str(&src).unwrap();
 /// assert_eq!(doc["plan"][49]["headers"]["Accept"].as_str(), Some("application/json"));
+///
+/// // Tags are removed, so accessors see the tagged scalar.
+/// let doc: Value = yaml::from_str("url: !path /x").unwrap();
+/// assert_eq!(doc["url"].as_str(), Some("/x"));
+///
+/// // A duplicate key is an error for typed targets too.
+/// let dup = yaml::from_str::<std::collections::HashMap<String, i32>>("a: 1\na: 2\n");
+/// assert!(dup.is_err());
 /// ```
 ///
 /// # Errors
 ///
 /// Returns an [`Error`] for malformed YAML, duplicate or colliding keys,
-/// non-scalar keys, nesting deeper than 128 levels, or runaway alias expansion.
+/// non-scalar keys, nesting deeper than 128 levels, or runaway alias
+/// expansion. A duplicate key's error carries the position of the second
+/// occurrence in [`Error::location`].
 pub fn from_str<T>(s: &str) -> Result<T, Error>
 where
   T: serde::de::DeserializeOwned + 'static,
 {
-  noyalib::from_str_with_config(s, &parser_config()).map_err(|e| Error::from_noyalib_with_input(e, s))
+  let target = TypeId::of::<T>();
+  let config = parser_config();
+  if target != TypeId::of::<Value>() && target != TypeId::of::<Mapping>() {
+    return noyalib::from_str_with_config(s, &config).map_err(|e| Error::from_noyalib_with_input(e, s));
+  }
+  let value: Value = noyalib::from_str_with_config(s, &config).map_err(|e| Error::from_noyalib_with_input(e, s))?;
+  // A tag needs a `!` somewhere in the text; skip the rebuild otherwise.
+  let value = if s.contains('!') {
+    value.untag()
+  } else {
+    value
+  };
+  let parsed: Box<dyn Any> = if target == TypeId::of::<Value>() {
+    Box::new(value)
+  } else {
+    match value {
+      Value::Mapping(mapping) => Box::new(mapping),
+      other => return noyalib::compat::serde_yaml::from_value(other),
+    }
+  };
+  Ok(*parsed.downcast::<T>().expect("T is Value or Mapping, checked by TypeId above"))
 }
 
 /// The parser configuration behind [`from_str`].
 ///
 /// Starts from noyalib's `serde_yaml` compatibility profile (scalar resolution,
 /// error shape, depth 128 and the 100-jumps-per-event alias rule) and removes
-/// the budgets `serde_yaml` never had. Duplicate keys stay an error, as they
-/// were for `serde_yaml::Value`.
+/// the budgets `serde_yaml` never had. Duplicate keys are an error for every
+/// target, as YAML 1.2 requires (`serde_yaml` let a `HashMap` target keep the
+/// last entry).
 fn parser_config() -> ParserConfig {
   let base = ParserConfig::serde_yaml_compat();
   let mut limits = base.limits();

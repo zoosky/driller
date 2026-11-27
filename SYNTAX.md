@@ -74,6 +74,14 @@ The `body` property can be specified in different ways depending on the type of 
 
 1. `body: "string with {{ templates }}"`
   - This variant allows you to use a string with templates that can be interpolated with values from the context.
+  - A quoted body that spans several lines must indent every continuation line, including the closing quote, deeper than the `body:` key. A closing `}'` lined up under `body:` is a parse error. For multi-line JSON, a block scalar is easiest:
+
+    ```yaml
+    body: |
+      {"name": "{{ item.name }}", "id": {{ item.id }}}
+    ```
+
+    A block scalar keeps its trailing newline; use `|-` to drop it.
 
 2. `body: { hex: 65 78 61 6D 70 6C 65 }`
   - This variant allows you to send a raw byte string value in the request body.
