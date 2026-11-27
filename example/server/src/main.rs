@@ -186,12 +186,12 @@ fn with_session_cookie(sid: &str, mut response: Response) -> Response {
 
 /// Extract the `sid` value from the request's `Cookie` header, if present.
 ///
-/// The value may arrive double-quoted -- RFC 6265 permits the quoted-string
-/// form, and reqwest's cookie store (used by driller) re-sends it as
-/// `sid="..."` -- so surrounding quotes are trimmed.
+/// The value is used exactly as sent. A client must return the cookie as the
+/// server set it (`sid=s0`); a changed value, such as `sid="s0"`, matches no
+/// session, so `/counter` answers 403 and the cookies example plan fails.
 fn cookie_sid(headers: &HeaderMap) -> Option<String> {
   let cookies = headers.get(header::COOKIE)?.to_str().ok()?;
-  cookies.split(';').map(str::trim).find_map(|pair| pair.strip_prefix("sid=").map(|v| v.trim_matches('"').to_owned()))
+  cookies.split(';').map(str::trim).find_map(|pair| pair.strip_prefix("sid=").map(str::to_owned))
 }
 
 /// Combine `a` and `b` for the `/api/transactions` check: add them when both

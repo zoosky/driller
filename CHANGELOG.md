@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `with_items` entry, a CSV row or an `assign`ed response) fails that request
   with `ERR invalid value for header <name>`, counted like a connection
   error, and the run continues. Before, the whole run crashed.
+- Cookies are sent back exactly as the server set them. driller added quotes
+  around each value (`Cookie: sid="s0"` for `Set-Cookie: sid=s0`), so a
+  server that does not strip quotes saw a different session ID. Multiple
+  cookies are now separated by `"; "`, as RFC 6265 specifies. The example
+  server no longer strips quotes either, so the cookies example plan checks
+  this in CI.
 
 ### Changed
 - Custom headers are sent in the order the plan lists them, instead of in a

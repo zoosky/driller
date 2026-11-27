@@ -98,7 +98,7 @@ impl Request {
 
     if let Some(cookies) = context.get("cookies") {
       let cookies: Map<String, Value> = serde_json::from_value(cookies.clone()).unwrap();
-      let cookie = cookies.iter().map(|(key, value)| format!("{key}={value}")).collect::<Vec<_>>().join(";");
+      let cookie = cookie_header(&cookies);
 
       headers.insert(header::COOKIE, HeaderValue::from_str(&cookie).unwrap());
     }
@@ -237,6 +237,17 @@ fn charset_from_content_type(content_type: &str) -> Option<&str> {
   })
 }
 
+/// Builds the `Cookie` request header from the cookie jar in the context.
+///
+/// The jar stores each value as the JSON string the server sent in
+/// `Set-Cookie`. It is sent back unchanged, without the quotes JSON formatting
+/// would add (`sid=s0`, not `sid="s0"`), and pairs are separated by `"; "` as
+/// RFC 6265 specifies. A non-string value, which only appears if a plan
+/// overwrites the jar, is sent in its JSON form.
+fn cookie_header(cookies: &Map<String, Value>) -> String {
+  cookies.iter().map(|(name, value)| format!("{name}={}", value.as_str().map_or_else(|| value.to_string(), str::to_owned))).collect::<Vec<_>>().join("; ")
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -278,6 +289,47 @@ mod tests {
 
     assert!(response.is_none(), "a request with an invalid header value must fail");
     assert_eq!(duration_ms, 0.0);
+  }
+
+  #[test]
+  fn cookies_are_sent_back_as_the_server_set_them() {
+    let mut cookies = Map::new();
+    cookies.insert("sid".to_string(), json!("s0"));
+    cookies.insert("theme".to_string(), json!("dark mode"));
+    assert_eq!(cookie_header(&cookies), "sid=s0; theme=dark mode");
+  }
+
+  /// End to end: the `Cookie` header on the wire carries the stored value
+  /// without added quotes.
+  #[test]
+  fn cookie_header_on_the_wire_has_no_added_quotes() {
+    use std::collections::HashMap;
+    use std::io::Read;
+    use std::net::TcpListener;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = thread::spawn(move || {
+      let (mut stream, _) = listener.accept().unwrap();
+      let mut buf = [0u8; 4096];
+      let n = stream.read(&mut buf).unwrap();
+      stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
+      String::from_utf8_lossy(&buf[..n]).lines().find(|line| line.to_ascii_lowercase().starts_with("cookie:")).map(str::to_owned)
+    });
+
+    let request = Request::simple_get("cookie", &format!("http://{addr}/"));
+    let mut context: Context = Context::new();
+    context.insert("cookies".to_string(), json!({"sid": "s0"}));
+    let pool: Pool = Arc::new(Mutex::new(HashMap::new()));
+    let config = test_config();
+
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    let (response, _) = runtime.block_on(request.send_request(&mut context, &pool, &config));
+
+    assert!(response.is_some(), "expected a response");
+    assert_eq!(server.join().unwrap().as_deref(), Some("cookie: sid=s0"));
   }
 
   /// The latency timer must span the full body download (time-to-last-byte):
